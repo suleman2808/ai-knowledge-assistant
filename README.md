@@ -12,8 +12,8 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Steps 1–2 of 10 complete (configuration,
-> LLM abstraction, document ingestion).
+> **Status:** under construction. Steps 1–3 of 10 complete (configuration,
+> LLM abstraction, ingestion, retrieval).
 
 ## Stack
 
@@ -77,6 +77,13 @@ Inspect chunking without embedding anything:
 python -m scripts.inspect_chunks --show 2
 ```
 
+## Querying the knowledge base
+
+```bash
+python -m scripts.search "how much is a root canal"
+python -m scripts.search --calibrate
+```
+
 ## Project layout
 
 ```
@@ -134,6 +141,42 @@ was coherent. Three consequences:
 
 Size-based splitting is the fallback, not the strategy, and it splits on
 paragraph then sentence boundaries with a 150-character overlap.
+
+**How retrieval failures are handled.** `retrieve()` never raises for an
+expected condition. It returns a `RetrievalResult` carrying a status the
+agent branches on: `OK`, `LOW_CONFIDENCE` (matches exist but all score
+below the threshold), `NO_MATCH`, `EMPTY_INDEX` (nothing ingested — an
+operator error, distinct from a user one) and `UNAVAILABLE` (the store or
+model failed). Exceptions are reserved for genuine bugs, so no ordinary
+production condition can produce a stack trace in front of a customer.
+
+**The threshold is necessary but not sufficient — measured, not assumed.**
+`scripts/search.py --calibrate` scores twelve questions the documents
+answer against six they do not. The groups *overlap*:
+
+| Query | Score | In scope? |
+| --- | --- | --- |
+| "how long do fillings last" | 0.835 | yes |
+| "what are your opening hours on Saturday" | 0.726 | yes |
+| **"what time does the cinema open"** | **0.422** | **no** |
+| "who do I speak to about a billing problem" | 0.384 | yes |
+| "is there parking at the clinic" | 0.380 | yes |
+| "what is the capital of France" | 0.051 | no |
+
+No single threshold separates them. The cinema question outscores two
+legitimate ones and retrieves the clinic's opening-hours table, which a
+naive agent would happily answer from.
+
+The response is a two-stage defence rather than a better number:
+
+1. The threshold (0.30) rejects the obviously unrelated.
+2. The Inquiry Agent's prompt requires that the retrieved context actually
+   answers *this* question, and refuses when it does not.
+
+Stage two is what catches the cinema case. The longer-term fixes — hybrid
+BM25 plus vector search, or a cross-encoder reranker — are deferred until
+the system works end to end, since both are tuning rather than
+architecture.
 
 **Why cosine distance is set explicitly.** Chroma defaults to squared L2.
 With normalised vectors the ranking would be the same, but the distance
