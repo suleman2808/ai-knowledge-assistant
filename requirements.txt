@@ -1,0 +1,27 @@
+# --- Core orchestration -------------------------------------------------
+langgraph>=0.2.60
+langchain-core>=0.3.25
+
+# --- LLM provider -------------------------------------------------------
+# Only the Groq SDK is imported, and only inside app/llm.py.
+# Swapping providers means changing that one module, not the whole app.
+groq>=0.13.0
+
+# --- Retrieval ----------------------------------------------------------
+chromadb>=0.5.20
+sentence-transformers>=3.3.0
+
+# --- HTTP layer ---------------------------------------------------------
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+
+# --- Google Calendar (Booking Agent) ------------------------------------
+google-api-python-client>=2.150.0
+google-auth-oauthlib>=1.2.1
+
+# --- Dev / test ---------------------------------------------------------
+pytest>=8.3.0
+httpx>=0.27.0
+python-dateutil>=2.9.0
