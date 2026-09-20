@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     google_credentials_file: Path = Path("credentials.json")
     google_token_file: Path = Path("token.json")
     google_calendar_id: str = "primary"
+    # The clinic's local time. All naive datetimes in the booking code are
+    # wall-clock times in this zone; the Google integration is the only
+    # place that converts to and from absolute time.
+    clinic_timezone: str = "America/Los_Angeles"
 
     # --- Server ----------------------------------------------------------
     app_host: str = "127.0.0.1"

@@ -20,6 +20,9 @@ pydantic-settings>=2.6.0
 # --- Google Calendar (Booking Agent) ------------------------------------
 google-api-python-client>=2.150.0
 google-auth-oauthlib>=1.2.1
+# Windows ships no IANA time zone database, so zoneinfo cannot resolve
+# "America/Los_Angeles" without this. Harmless on Linux and macOS.
+tzdata>=2024.2
 
 # --- Dev / test ---------------------------------------------------------
 pytest>=8.3.0
