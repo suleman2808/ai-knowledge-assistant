@@ -321,16 +321,39 @@ class GoogleCalendar:
         )
 
     def check(self) -> dict[str, Any]:
-        """Confirm the connection works. Used by the setup script."""
+        """Confirm the connection works, using only the granted scope.
+
+        Deliberately an `events.list` call rather than `calendars.get`.
+        Reading calendar *metadata* requires the broader `calendar`
+        scope, and widening the scope purely so a health check can print
+        a calendar's name would undo the reason for requesting the
+        narrow one. The check verifies what the app actually does:
+        reading events.
+        """
+        today = date.today()
         try:
-            calendar = (
-                self._service.calendars().get(calendarId=self._calendar_id).execute()
+            response = (
+                self._service.events()
+                .list(
+                    calendarId=self._calendar_id,
+                    timeMin=to_rfc3339(datetime.combine(today, datetime.min.time())),
+                    timeMax=to_rfc3339(
+                        datetime.combine(today, datetime.min.time()) + timedelta(days=7)
+                    ),
+                    singleEvents=True,
+                    maxResults=10,
+                )
+                .execute()
             )
         except Exception as exc:
-            raise CalendarError(f"Could not read calendar metadata: {exc}") from exc
+            raise CalendarError(f"Could not read events: {exc}") from exc
 
         return {
-            "id": calendar.get("id"),
-            "summary": calendar.get("summary"),
-            "timezone": calendar.get("timeZone"),
+            "id": self._calendar_id,
+            # `summary` is the calendar's own name, returned by the list
+            # endpoint without needing metadata access.
+            "summary": response.get("summary", self._calendar_id),
+            # Likewise the calendar's configured time zone.
+            "timezone": response.get("timeZone", ""),
+            "events_next_7_days": len(response.get("items", [])),
         }

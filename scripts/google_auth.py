@@ -61,9 +61,10 @@ def check() -> int:
         return 1
 
     print("Connected to Google Calendar")
-    print(f"  calendar : {info['summary']}  ({info['id']})")
-    print(f"  Google timezone : {info['timezone']}")
+    print(f"  calendar        : {info['summary']}  ({info['id']})")
+    print(f"  Google timezone : {info['timezone'] or '(not reported)'}")
     print(f"  clinic timezone : {settings.clinic_timezone}")
+    print(f"  events next 7d  : {info['events_next_7_days']}")
 
     if info["timezone"] and info["timezone"] != settings.clinic_timezone:
         print(
