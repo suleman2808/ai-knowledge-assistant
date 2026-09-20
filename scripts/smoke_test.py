@@ -44,7 +44,7 @@ def check_text_completion() -> bool:
         response = complete_verbose(
             "Reply with exactly the word: pong",
             system="You are a terse test harness. Obey literally.",
-            max_tokens=10,
+            max_tokens=256,
         )
     except LLMError as exc:
         print(f"{FAIL} Text completion failed: {exc}")
@@ -66,7 +66,8 @@ def check_json_completion() -> bool:
             'Reply as JSON: {"intent": "booking" | "inquiry" | "complaint"}',
             system="You are an intent classifier. Reply with JSON only.",
             model=settings.router_model,
-            max_tokens=64,
+            max_tokens=256,
+            reasoning_effort=settings.router_reasoning_effort,
         )
     except LLMError as exc:
         print(f"{FAIL} JSON completion failed: {exc}")
