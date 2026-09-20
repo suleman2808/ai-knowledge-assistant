@@ -12,8 +12,28 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Steps 1–4 of 10 complete (configuration,
-> LLM abstraction, ingestion, retrieval, the three specialist agents).
+> **Status:** under construction. Steps 1–5 of 10 complete (configuration,
+> LLM abstraction, ingestion, retrieval, the three agents, the router).
+
+```
+                      ┌─────────┐
+   message  ────────▶ │ router  │  keyword fast-path, else small LLM
+                      └────┬────┘
+           ┌───────────┬───┴───────┬───────────┐
+           ▼           ▼           ▼           ▼
+       ┌───────┐  ┌─────────┐ ┌──────────┐ ┌───────┐
+       │booking│  │ inquiry │ │complaint │ │ other │
+       └───┬───┘  └────┬────┘ └────┬─────┘ └───┬───┘
+           └───────────┴─────┬─────┴───────────┘
+                             ▼
+                       ┌──────────┐
+                       │ finalise │  secondary-intent note, turn record
+                       └──────────┘
+```
+
+The real diagram is generated from the compiled graph — see
+[docs/architecture.md](docs/architecture.md), regenerated with
+`python -m scripts.draw_graph --write`.
 
 ## Stack
 
@@ -98,6 +118,14 @@ app/
 data/documents/      Source documents for the knowledge base
 scripts/             CLI entry points
 tests/               pytest suite
+```
+
+Talk to the assembled assistant:
+
+```bash
+python -m scripts.chat                     # interactive, keeps history
+python -m scripts.chat --routing           # routing accuracy probe
+python -m scripts.chat --scenario booking  # scripted multi-turn booking
 ```
 
 Run any agent on its own, without the graph or the API:
@@ -187,6 +215,63 @@ Stage two is what catches the cinema case. The longer-term fixes — hybrid
 BM25 plus vector search, or a cross-encoder reranker — are deferred until
 the system works end to end, since both are tuning rather than
 architecture.
+
+**Why LangGraph rather than an if/else router.** The dispatch itself
+*could* be four lines of `if`. What the graph buys is everything around
+it: the structure is inspectable (the diagram is generated from the
+compiled graph, so it cannot drift from what runs), state is explicit and
+typed rather than whatever locals are in scope, each node is a pure
+`state -> partial state` function testable without the graph, and adding
+human handoff or a clarification loop means adding a node and an edge
+rather than nesting another branch inside a function nobody wants to
+touch. Honest version of the trade-off: for exactly three static
+branches, if/else is simpler. Choosing a graph is a bet that the system
+grows — and the moment a fourth intent appears, the if/else version
+starts paying interest.
+
+**The router has a keyword fast-path, and it is deliberately narrow.**
+"hi" and "thanks" are among the commonest messages a public chat box
+receives, and spending 400ms and an LLM call on them is waste — they
+resolve in about 9ms. But the fast-path only matches *whole messages*,
+never substrings, and only up to three words. "I want to cancel my
+complaint about the cancellation fee" contains three trigger words and
+means one thing; anything with real content goes to the model. Naive
+keyword routers break precisely here, and a test covers it.
+
+**Routing accuracy is measured, not assumed.** `--routing` scores 18
+hand-labelled messages including the cases designed to be hard: policy
+question versus diary change ("what is your cancellation policy" is an
+inquiry, "I need to cancel Tuesday" is a booking), an angry question
+that is still a question, and a message whose only content is
+"Sarah Chen, 503-555-0180" — no intent words at all, routed correctly
+from conversation history. Currently 18/18. The first run scored 15/17
+and the two failures were both real: one prompt bug, one wrong label of
+mine.
+
+**Mixed intents: complaint always wins.** "I waited 40 minutes and I'm
+furious, anyway can I book a cleaning Tuesday" routes to `complaint`
+with `booking` recorded as secondary. The rule is asymmetric cost — a
+booking the patient did not get, they ask for again; a complaint never
+recorded is gone, and the clinic never learns of it. The first version
+let the model weigh them and it chose booking.
+
+**The secondary-intent note offers, it does not assert.** The reply says
+"I haven't logged that as a complaint yet — say the word and I will",
+not "I've also logged your complaint". Claiming work that was not done
+is a lie the patient discovers when nobody calls back. A test enforces
+the wording.
+
+**A fourth intent, `other`, exists because real chat boxes receive
+"hi".** Routing a greeting to the RAG agent produces "I don't have that
+in the clinic's information" — technically true, terrible first
+impression. `other` covers two different cases and answers them
+differently: a pleasantry gets a greeting, while a genuinely out-of-scope
+question gets told plainly it is out of scope.
+
+**Classification failure defaults to `inquiry`.** It is the only agent
+that refuses gracefully when it turns out to be wrong. Defaulting to
+booking would interrogate a confused user; defaulting to complaint would
+manufacture a record of something that never happened.
 
 **Agents are plain functions, not graph nodes.** Each agent takes a
 message and returns an `AgentResponse`. None of them imports LangGraph,
