@@ -12,8 +12,8 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Step 1 of 10 complete (configuration and
-> LLM abstraction layer).
+> **Status:** under construction. Steps 1–2 of 10 complete (configuration,
+> LLM abstraction, document ingestion).
 
 ## Stack
 
@@ -59,6 +59,24 @@ can actually reach and update `.env` accordingly:
 python -m scripts.list_models
 ```
 
+## Building the knowledge base
+
+```bash
+python -m scripts.ingest
+```
+
+This chunks the documents in `data/documents/`, embeds them locally and
+writes them to ChromaDB. The first run downloads the embedding model
+(~90 MB); later runs take a few seconds. The demo corpus is nine documents
+covering pricing, insurance, policies, clinical aftercare, emergencies,
+staff and an FAQ — 74 chunks in total.
+
+Inspect chunking without embedding anything:
+
+```bash
+python -m scripts.inspect_chunks --show 2
+```
+
 ## Project layout
 
 ```
@@ -96,5 +114,31 @@ hard to diagnose.
 **Why local embeddings.** Embedding a few hundred chunks through an API
 means a key, a bill and a rate limit. `all-MiniLM-L6-v2` runs on CPU in
 seconds and makes the project work offline.
+
+**Chunking strategy.** Chunks are split on markdown headings rather than a
+fixed character count, so each chunk is a unit the author already decided
+was coherent. Three consequences:
+
+- *Tables are never separated from their header row.* A split price table
+  leaves rows whose numbers survive but whose meaning does not. When a
+  table genuinely exceeds the size limit, it is split row-wise with the
+  header repeated in every part.
+- *The heading path is prepended to the embedded text.* A section reading
+  only "A fee of $50 applies" embeds poorly on its own; prefixed with
+  "Appointment Policy > Cancellation Policy" it retrieves correctly. The
+  prefix is added to the embedded form only — the stored text stays clean.
+- *Short sections merge only into siblings.* Merging a brief section into
+  whatever happened to precede it can file it under an unrelated parent,
+  so a complaints question gets answered by text cited as "Payment >
+  Refunds". A test covers this; it caught the bug during development.
+
+Size-based splitting is the fallback, not the strategy, and it splits on
+paragraph then sentence boundaries with a 150-character overlap.
+
+**Why cosine distance is set explicitly.** Chroma defaults to squared L2.
+With normalised vectors the ranking would be the same, but the distance
+range differs, which would make a fixed relevance threshold meaningless.
+The threshold is what lets the Inquiry Agent say "I don't know" instead of
+answering from a weak match.
 
 More design notes are added with each step.
