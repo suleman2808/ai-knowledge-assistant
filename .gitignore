@@ -1,0 +1,28 @@
+# Secrets — never commit these
+.env
+credentials.json
+token.json
+
+# Generated data stores
+data/chroma/
+data/*.db
+data/*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / OS
+.claude/settings.local.json
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Model cache (sentence-transformers downloads here if HF_HOME is set locally)
+.cache/
