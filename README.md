@@ -18,7 +18,7 @@ Every interaction is logged for analytics.
 ## Stack
 
 - **LangGraph** — agent orchestration as an explicit, inspectable graph
-- **Groq** (`llama-3.3-70b-versatile`) — LLM inference, free tier
+- **Groq** (`openai/gpt-oss-120b`) — LLM inference, free tier
 - **sentence-transformers** — embeddings computed locally, no API calls
 - **ChromaDB** — persisted local vector store
 - **FastAPI** — HTTP layer with auto-generated interactive docs
@@ -52,6 +52,13 @@ to `.env`, then verify the setup:
 python -m scripts.smoke_test
 ```
 
+If a model name has been retired since this was written, list what your key
+can actually reach and update `.env` accordingly:
+
+```bash
+python -m scripts.list_models
+```
+
 ## Project layout
 
 ```
@@ -74,10 +81,17 @@ rewriting one function. Retry policy, backoff and error translation live
 there too, so failure handling is consistent rather than duplicated at every
 call site.
 
-**Why two models.** Intent classification into three buckets does not need a
-70B model. The router uses `llama-3.1-8b-instant`, which is faster and
-lighter on the free tier's rate limit; the agents use the larger model where
-answer quality actually matters.
+**Why two models.** Intent classification into three buckets does not need
+the large model. The router uses `openai/gpt-oss-20b` at low reasoning
+effort — faster and lighter on the free tier's rate limit; the agents use
+`openai/gpt-oss-120b`, where answer quality actually matters.
+
+**Reasoning-model token budgets.** The `gpt-oss` models spend hidden
+reasoning tokens from the same `max_tokens` budget as the visible reply. Set
+the cap too low and the API returns success with an *empty* string rather
+than an error. `app/llm.py` detects that case and raises an explanatory
+error naming the real cause, because an empty reply is otherwise extremely
+hard to diagnose.
 
 **Why local embeddings.** Embedding a few hundred chunks through an API
 means a key, a bill and a rate limit. `all-MiniLM-L6-v2` runs on CPU in

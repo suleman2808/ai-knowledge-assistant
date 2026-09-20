@@ -38,10 +38,17 @@ class Settings(BaseSettings):
     # `/health` must still answer) when the key is absent, so that a missing
     # key produces a friendly message instead of a crash on startup.
     groq_api_key: str = ""
-    llm_model: str = "llama-3.3-70b-versatile"
-    router_model: str = "llama-3.1-8b-instant"
+    llm_model: str = "openai/gpt-oss-120b"
+    router_model: str = "openai/gpt-oss-20b"
     llm_temperature: float = 0.2
+    # Generous by default: these are reasoning models, and the hidden
+    # reasoning tokens are drawn from the same budget as the visible reply.
+    # Too small a cap yields an empty answer rather than a truncated one.
     llm_max_tokens: int = 1024
+    # "low" | "medium" | "high". Classification needs no deliberation, so
+    # the router runs at "low" to keep it fast and cheap.
+    llm_reasoning_effort: str = "medium"
+    router_reasoning_effort: str = "low"
 
     # --- Embeddings ------------------------------------------------------
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

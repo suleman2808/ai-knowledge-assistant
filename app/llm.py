@@ -113,7 +113,13 @@ def _is_retryable(exc: Exception) -> bool:
     are surfaced immediately instead of wasting the user's time.
     """
     name = type(exc).__name__
-    if name in {"AuthenticationError", "PermissionDeniedError", "BadRequestError"}:
+    if name in {
+        "AuthenticationError",
+        "PermissionDeniedError",
+        "BadRequestError",
+        "NotFoundError",  # retired or misspelled model name
+        "UnprocessableEntityError",
+    }:
         return False
     if name in {"RateLimitError", "APIConnectionError", "APITimeoutError", "InternalServerError"}:
         return True
@@ -128,6 +134,7 @@ def _chat(
     temperature: float,
     max_tokens: int,
     json_mode: bool,
+    reasoning_effort: str | None = None,
 ) -> LLMResponse:
     """Send a chat request to the provider, with retries.
 
@@ -141,6 +148,11 @@ def _chat(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    if reasoning_effort:
+        # Supported by the gpt-oss family on Groq. Providers that do not
+        # know the parameter would reject the request, so it is only sent
+        # when explicitly configured.
+        kwargs["reasoning_effort"] = reasoning_effort
     if json_mode:
         # Provider-side constrained decoding: the model is forced to emit
         # syntactically valid JSON. Cheaper and far more reliable than
@@ -148,7 +160,9 @@ def _chat(
         kwargs["response_format"] = {"type": "json_object"}
 
     last_error: Exception | None = None
+    attempts_made = 0
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        attempts_made = attempt
         started = time.perf_counter()
         try:
             completion = client.chat.completions.create(**kwargs)
@@ -166,8 +180,23 @@ def _chat(
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         usage = getattr(completion, "usage", None)
+        text = (completion.choices[0].message.content or "").strip()
+
+        if not text:
+            # Reasoning models draw hidden reasoning tokens from the same
+            # budget as the reply. When max_tokens is too low the request
+            # succeeds but returns nothing, which is far more confusing
+            # than an error, so we name the actual cause.
+            finish = getattr(completion.choices[0], "finish_reason", "unknown")
+            raise LLMError(
+                f"{model} returned an empty reply (finish_reason={finish}, "
+                f"max_tokens={max_tokens}). For reasoning models this usually "
+                f"means the token budget was consumed by reasoning. Raise "
+                f"LLM_MAX_TOKENS or lower the reasoning effort."
+            )
+
         return LLMResponse(
-            text=(completion.choices[0].message.content or "").strip(),
+            text=text,
             model=model,
             latency_ms=latency_ms,
             prompt_tokens=getattr(usage, "prompt_tokens", 0) or 0,
@@ -176,7 +205,7 @@ def _chat(
         )
 
     raise LLMError(
-        f"LLM call failed after {MAX_ATTEMPTS} attempt(s): "
+        f"LLM call to {model} failed after {attempts_made} attempt(s): "
         f"{type(last_error).__name__}: {last_error}"
     ) from last_error
 
@@ -193,6 +222,7 @@ def complete(
     model: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
 ) -> str:
     """Return the model's reply to `prompt` as plain text.
 
@@ -203,7 +233,10 @@ def complete(
             one here).
         temperature: Override sampling temperature. Lower is more
             deterministic; the default of 0.2 suits grounded answering.
-        max_tokens: Cap on the reply length.
+        max_tokens: Cap on the reply length. Reasoning models spend part of
+            this budget on hidden reasoning, so do not set it too low.
+        reasoning_effort: "low", "medium" or "high" for models that support
+            it. Defaults to the configured value.
 
     Returns:
         The reply text, stripped.
@@ -218,6 +251,7 @@ def complete(
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
     ).text
 
 
@@ -228,6 +262,7 @@ def complete_verbose(
     model: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
 ) -> LLMResponse:
     """Like `complete()`, but returns latency and token usage too.
 
@@ -245,6 +280,7 @@ def complete_verbose(
         temperature=settings.llm_temperature if temperature is None else temperature,
         max_tokens=max_tokens or settings.llm_max_tokens,
         json_mode=False,
+        reasoning_effort=reasoning_effort or settings.llm_reasoning_effort,
     )
 
 
@@ -255,6 +291,7 @@ def complete_json(
     model: str | None = None,
     temperature: float = 0.0,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     """Return the model's reply parsed as a JSON object.
 
@@ -277,6 +314,7 @@ def complete_json(
         temperature=temperature,
         max_tokens=max_tokens or settings.llm_max_tokens,
         json_mode=True,
+        reasoning_effort=reasoning_effort or settings.llm_reasoning_effort,
     )
 
     try:
