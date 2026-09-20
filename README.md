@@ -12,8 +12,8 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Steps 1–5 of 10 complete (configuration,
-> LLM abstraction, ingestion, retrieval, the three agents, the router).
+> **Status:** under construction. Steps 1–6 of 10 complete (configuration,
+> LLM abstraction, ingestion, retrieval, agents, router, Google Calendar).
 
 ```
                       ┌─────────┐
@@ -120,6 +120,26 @@ scripts/             CLI entry points
 tests/               pytest suite
 ```
 
+## Google Calendar (optional)
+
+**Skip this and everything still works.** Without credentials the
+Booking Agent uses an in-memory calendar that enforces real clash
+detection, so a fresh clone runs end to end with no Google account.
+
+To book into a real calendar:
+
+1. [console.cloud.google.com](https://console.cloud.google.com/) → new project
+2. APIs & Services → Library → **Google Calendar API** → Enable
+3. OAuth consent screen → External → **add your own address as a test user**
+4. Credentials → Create Credentials → OAuth client ID → **Desktop app**
+5. Download the JSON as `credentials.json` in the project root (gitignored)
+
+```bash
+python -m scripts.google_auth          # authorise, once, in a browser
+python -m scripts.google_auth --check  # verify and list free slots
+python -m scripts.google_auth --revoke # back to the in-memory calendar
+```
+
 Talk to the assembled assistant:
 
 ```bash
@@ -215,6 +235,36 @@ Stage two is what catches the cinema case. The longer-term fixes — hybrid
 BM25 plus vector search, or a cross-encoder reranker — are deferred until
 the system works end to end, since both are tuning rather than
 architecture.
+
+**Timezones are converted at exactly one boundary.** The rest of the
+project uses naive datetimes meaning clinic wall-clock time, which is
+the right model for a business whose hours are "Monday 8am to 5pm"
+regardless of where the patient is sitting. Google works in absolute
+time. `app/integrations/google_calendar.py` is the only module that
+converts, and it is tested across a DST boundary: 2pm is `-08:00` in
+January and `-07:00` in July. An appointment written an hour out is
+worse than no appointment, because the patient turns up.
+
+**The OAuth consent flow lives in a script, not in the app.** It opens a
+browser, which must never happen inside an HTTP request — the server
+would block on a dialogue nobody can see. At runtime the backend only
+*loads* a stored token, refreshing it silently when expired; if there is
+no usable token it raises, and `get_calendar()` falls back to the
+in-memory calendar. The scope requested is `calendar.events`, not
+`calendar`, so the consent screen does not ask for permission to delete
+entire calendars.
+
+**A clash is re-checked immediately before writing.** Google has no
+conditional insert, so a check cannot be atomic with the write. A
+conversation takes seconds; re-checking narrows the race to
+milliseconds. The remaining window is handled rather than ignored — the
+Booking Agent treats a write-time clash as "offer alternatives", not as
+an error.
+
+**Events the organiser marked free, and cancelled events, do not block
+the diary**, and recurring events are expanded with `singleEvents` —
+without it a weekly staff meeting blocks only its first week and every
+other Tuesday looks bookable.
 
 **Why LangGraph rather than an if/else router.** The dispatch itself
 *could* be four lines of `if`. What the graph buys is everything around
