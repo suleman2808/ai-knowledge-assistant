@@ -12,8 +12,8 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Steps 1–3 of 10 complete (configuration,
-> LLM abstraction, ingestion, retrieval).
+> **Status:** under construction. Steps 1–4 of 10 complete (configuration,
+> LLM abstraction, ingestion, retrieval, the three specialist agents).
 
 ## Stack
 
@@ -90,12 +90,22 @@ python -m scripts.search --calibrate
 app/
   config.py          Typed configuration, loaded once from .env
   llm.py             The only module that talks to an LLM provider
-  graph/             LangGraph state, router and agent nodes
+  agents/            The three specialists, each a plain function
+  prompts/           Prompt templates as .md files
+  graph/             LangGraph state, router and wiring
   rag/               Ingestion, chunking, embeddings, retrieval
-  integrations/      Google Calendar, analytics
+  integrations/      Calendar, analytics
 data/documents/      Source documents for the knowledge base
 scripts/             CLI entry points
 tests/               pytest suite
+```
+
+Run any agent on its own, without the graph or the API:
+
+```bash
+python -m scripts.try_agent inquiry --suite
+python -m scripts.try_agent booking "book a cleaning next Tuesday at 2pm"
+python -m scripts.try_agent complaint "I was charged twice"
 ```
 
 ## Design notes
@@ -177,6 +187,54 @@ Stage two is what catches the cinema case. The longer-term fixes — hybrid
 BM25 plus vector search, or a cross-encoder reranker — are deferred until
 the system works end to end, since both are tuning rather than
 architecture.
+
+**Agents are plain functions, not graph nodes.** Each agent takes a
+message and returns an `AgentResponse`. None of them imports LangGraph,
+FastAPI or another agent, so each is testable alone and step 5 wires them
+into a graph without changing agent code. All 52 tests run in 0.33s
+because every LLM call is stubbed — what is tested is the logic around
+the model, not the model.
+
+**Prompts are markdown files, not string literals.** The person who should
+approve what a clinic says to patients does not read Python. Editing a
+prompt produces a readable diff, and tuning becomes a content change
+rather than a code change. Placeholders use `{{name}}` because prompts
+contain literal JSON braces that `str.format` would choke on.
+
+**The Booking Agent uses the LLM for one job only.** Extraction — pulling
+a service, a date and a phone number out of free text, including relative
+dates like "next Tuesday". Everything after that is deterministic code:
+whether that time is inside opening hours, whether it clashes, what the
+appointment length should be. The model cannot see the calendar, and a
+confidently double-booked appointment is worse than no booking. Extracted
+fields are validated before use: a date in the past is treated as missing
+rather than silently shifted, because it means the model mis-resolved a
+relative reference.
+
+**Complaint severity is assessed separately from the reply.** Asking one
+call to both judge severity and write an apology biases the judgement —
+a model composing a soothing response mirrors the patient's tone, so an
+angry message about a magazine outranks a calm report of a clinical
+injury. Assessment runs first, as JSON, with no audience.
+
+**Escalation is decided in code, never by the model.** The model's
+`requires_escalation` is one input. Any reported harm, any mention of
+legal action, and any high or critical severity escalates regardless of
+what the model concluded — the rules override upward, never downward. A
+missed escalation is expensive; a false positive costs one person one
+email. During testing a double-billing complaint with three ignored phone
+calls was rated `high` and *not* escalated because the model said so;
+that is now impossible, and a test enforces it.
+
+**A complaint is logged before the reply is generated.** If reply
+generation fails the complaint still exists. If assessment itself fails,
+the complaint is recorded at high severity and escalated anyway. The
+record carries regulatory weight; the reply is courtesy.
+
+**Invisible characters are stripped at the boundary.** The model returned
+a phone number containing a soft hyphen — it rendered correctly and broke
+when copied. `AgentResponse` normalises every answer, so no agent can
+forget.
 
 **Why cosine distance is set explicitly.** Chroma defaults to squared L2.
 With normalised vectors the ranking would be the same, but the distance
