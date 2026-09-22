@@ -93,7 +93,8 @@ def routing_probe() -> int:
 
     for message, expected in ROUTING_PROBES:
         started = time.perf_counter()
-        turn = run(message)
+        # Evaluation traffic, not patients: kept out of analytics.
+        turn = run(message, log=False)
         elapsed = (time.perf_counter() - started) * 1000
         actual = turn.get("intent", "?")
         secondary = turn.get("secondary_intent")

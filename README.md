@@ -12,8 +12,9 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Steps 1–6 of 10 complete (configuration,
-> LLM abstraction, ingestion, retrieval, agents, router, Google Calendar).
+> **Status:** under construction. Steps 1–7 of 10 complete (configuration,
+> LLM abstraction, ingestion, retrieval, agents, router, Google Calendar,
+> analytics).
 
 ```
                       ┌─────────┐
@@ -141,6 +142,21 @@ python -m scripts.google_auth --check  # verify and list free slots
 python -m scripts.google_auth --revoke # back to the in-memory calendar
 ```
 
+## Analytics
+
+Every turn is recorded in SQLite (`data/analytics.db`, gitignored).
+
+```bash
+python -m scripts.seed_demo --reset     # realistic demo traffic, through the real graph
+python -m scripts.analytics_report      # what patients asked, and how well it went
+```
+
+The report is organised around questions a clinic owner asks: what do
+patients want, can the assistant answer them, is it creating work or
+saving it, and is it fast. The most useful section is **knowledge gaps**
+— questions the assistant had to decline, which are things patients
+want to know that nobody has written down.
+
 Talk to the assembled assistant:
 
 ```bash
@@ -180,6 +196,38 @@ hard to diagnose.
 **Why local embeddings.** Embedding a few hundred chunks through an API
 means a key, a bill and a rate limit. `all-MiniLM-L6-v2` runs on CPU in
 seconds and makes the project work offline.
+
+**Contact details are redacted before anything reaches disk.** Analytics
+needs *what* patients asked, not *who* asked. Phone numbers and emails
+are stripped at the single write boundary, so no caller can forget.
+Probing the redactor found it also mangled ISO dates and turned the
+complaint reference `CMP-20260920-4F2A` into `CMP-[phone]-4F2A` —
+destroying the one identifier staff trace a complaint by. Both are now
+covered by tests. Names are not redacted; reliable name detection needs
+an NER model, and that limitation is stated rather than hidden.
+
+**Logging never breaks a conversation — except where it must.** A failed
+turn write is logged and swallowed; an analytics outage is an
+inconvenience, a chat that errors because of one is a defect. Complaints
+are the exception: a failed complaint write is caught, held in memory,
+logged at error level and flagged on the response, because a silently
+lost complaint is the one failure this project treats as unacceptable.
+
+**Logging lives in `run()`, not inside a graph node.** The graph stays
+free of side effects beyond the agents' own, so it can be invoked in
+tests or evaluations without polluting real numbers. The routing probe
+passes `log=False`, and every test gets its own throwaway database via
+an autouse fixture — before that fixture existed, the graph tests would
+have written into the real analytics file.
+
+**The first report found three retrieval bugs.** Of eight "knowledge
+gaps" in the seeded data, only four were real. The other four had three
+distinct causes: a bare brand name ("do you take cigna") scoring 0.23
+because an embedding model gives proper nouns little weight; a correct
+retrieval refused by an over-strict grounding check; and follow-up
+questions ("is that for one surface?") retrieved without the
+conversation that gives them meaning. Analytics doing its job on the
+system that produces it.
 
 **Why ONNX rather than PyTorch.** The project began on
 `sentence-transformers`. Mid-build, Windows Smart App Control started

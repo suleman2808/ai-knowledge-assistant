@@ -91,9 +91,10 @@ class ComplaintRecord:
 class ComplaintStore:
     """In-memory complaint log.
 
-    Replaced by the SQLite-backed store in step 7. The interface is kept
-    deliberately small — `record` and `all` — so that swap changes one
-    class and no calling code.
+    Used in tests, and as the emergency fallback when the persistent
+    store cannot be written. The interface — `record` and `all` — is
+    shared with `SQLiteComplaintStore`, so the agent does not care which
+    it has.
     """
 
     def __init__(self) -> None:
@@ -111,12 +112,42 @@ class ComplaintStore:
         return list(self._records)
 
 
-_store = ComplaintStore()
+_store: Any = None
+
+# Complaints that could not be persisted. Held in memory so they are at
+# least visible to this process, and logged at error level so an
+# operator is alerted. Better than losing them.
+_fallback = ComplaintStore()
 
 
-def get_store() -> ComplaintStore:
-    """Return the process-wide complaint store."""
+def get_store() -> Any:
+    """Return the process-wide complaint store (SQLite-backed)."""
+    global _store
+    if _store is None:
+        from app.integrations.analytics import SQLiteComplaintStore
+
+        _store = SQLiteComplaintStore()
     return _store
+
+
+def _persist(store: Any, record: "ComplaintRecord") -> bool:
+    """Write a complaint, falling back to memory if the store fails.
+
+    Returns True if the primary store accepted it. A False return is
+    recorded on the response so the failure is visible in analytics and
+    logs, but the patient's reply is unaffected — they still get a
+    reference number, and the complaint still exists.
+    """
+    try:
+        store.record(record)
+        return True
+    except Exception as exc:
+        logger.error(
+            "COMPLAINT NOT PERSISTED — held in memory only. ref=%s error=%s",
+            record.reference, exc,
+        )
+        _fallback.record(record)
+        return False
 
 
 def _reference() -> str:
@@ -218,7 +249,8 @@ def handle_complaint(
         # losing it is unacceptable. It is logged at high severity and
         # escalated, so a human sees it even though the model did not.
         reference = _reference()
-        log.record(
+        stored = _persist(
+            log,
             ComplaintRecord(
                 reference=reference,
                 received_at=datetime.now(),
@@ -228,7 +260,7 @@ def handle_complaint(
                 severity="high",
                 escalated=True,
                 escalation_reasons=["assessment failed; escalated by default"],
-            )
+            ),
         )
         return AgentResponse(
             answer=FALLBACK_REPLY.format(reference=reference),
@@ -240,6 +272,7 @@ def handle_complaint(
                 "escalated": True,
                 "error_detail": str(exc),
                 "assessment_failed": True,
+                "persisted": stored,
             },
         )
 
@@ -271,7 +304,7 @@ def handle_complaint(
     # Logged before the reply is generated. If reply generation fails the
     # complaint must still exist; the record is the part with legal and
     # regulatory weight, the reply is courtesy.
-    log.record(record)
+    stored = _persist(log, record)
 
     try:
         reply = complete(
@@ -301,5 +334,6 @@ def handle_complaint(
             "escalation_reasons": reasons,
             "mentions_harm": assessment["mentions_harm"],
             "mentions_legal_action": assessment["mentions_legal_action"],
+            "persisted": stored,
         },
     )
