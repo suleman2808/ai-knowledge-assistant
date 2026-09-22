@@ -35,6 +35,7 @@ paying interest.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from app.agents.base import AgentResponse
@@ -254,14 +255,35 @@ def run(
     *,
     history: list[dict[str, str]] | None = None,
     session_id: str = "",
+    log: bool = True,
 ) -> dict[str, Any]:
-    """Run one turn through the graph.
+    """Run one turn through the graph and record it.
 
-    The convenience entry point used by the CLI, the tests and, in step 8,
-    the API. Returns the `turn` record: everything about what happened,
-    ready to serialise or log.
+    The entry point used by the CLI and the API. Returns the `turn`
+    record: everything about what happened, ready to serialise.
+
+    Logging happens here rather than inside a node, which keeps the graph
+    itself free of side effects beyond what the agents do. The graph can
+    then be invoked in tests, notebooks or evaluations without polluting
+    the analytics store — pass `log=False`, or call `get_graph().invoke()`
+    directly.
+
+    Args:
+        log: Record the turn in analytics. Scripts that replay test
+            probes pass False so evaluation traffic does not skew the
+            real numbers.
     """
+    started = time.perf_counter()
     final = get_graph().invoke(
         new_state(message, history=history, session_id=session_id)
     )
-    return final.get("turn", {"answer": final.get("answer", ""), "intent": "unknown"})
+    latency_ms = int((time.perf_counter() - started) * 1000)
+
+    turn = final.get("turn", {"answer": final.get("answer", ""), "intent": "unknown"})
+    turn["latency_ms"] = latency_ms
+
+    if log:
+        from app.integrations.analytics import log_turn
+
+        log_turn(turn, latency_ms=latency_ms)
+    return turn
