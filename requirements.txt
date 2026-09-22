@@ -8,8 +8,11 @@ langchain-core>=0.3.25
 groq>=0.13.0
 
 # --- Retrieval ----------------------------------------------------------
+# Chroma also provides the default embedding runtime: all-MiniLM-L6-v2 as
+# an ONNX export on onnxruntime, with no PyTorch dependency.
 chromadb>=0.5.20
-sentence-transformers>=3.3.0
+numpy>=1.26
+# The optional PyTorch runtime lives in requirements-torch.txt.
 
 # --- HTTP layer ---------------------------------------------------------
 fastapi>=0.115.0

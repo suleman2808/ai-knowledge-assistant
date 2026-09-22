@@ -1,14 +1,31 @@
-"""Local embedding model.
+"""Local embedding model, with two interchangeable runtimes.
 
-Embeddings are computed on this machine with `sentence-transformers`, not
-through an API. For a corpus of a few hundred chunks this is strictly
-better: no key, no per-call cost, no rate limit, and ingestion can be rerun
-as often as we like while tuning the chunking strategy. It also means the
-retrieval half of the system works with no internet connection at all.
+Embeddings are computed on this machine, never through an API. For a
+corpus of a few hundred chunks that is strictly better: no key, no
+per-call cost, no rate limit, and ingestion can be rerun freely while
+tuning the chunking strategy. Retrieval works with no internet at all.
 
-The trade-off is a one-off model download (~90 MB) and a few seconds of CPU
-on first load, which is why the model is a lazily built singleton rather
-than being constructed per call.
+## Two backends, one model
+
+Both run `all-MiniLM-L6-v2` and produce the same 384-dimension vectors:
+
+- **onnx** (default) — the model's ONNX export on `onnxruntime`. No
+  PyTorch, so it installs in seconds rather than pulling ~1.5 GB, loads
+  faster, and runs on machines where PyTorch cannot.
+- **sentence-transformers** — the reference implementation on PyTorch.
+  Supports any Hugging Face embedding model, not just this one.
+
+The ONNX default was not the original plan. It was adopted when Windows
+Smart App Control began refusing PyTorch's unsigned `c10.dll`
+(`WinError 4551`) on the development machine, which broke every
+inquiry. Asking every user to weaken an OS security feature is not an
+acceptable install step, so the runtime changed rather than the machine.
+Anyone cloning onto a similarly locked-down Windows box would have hit
+the same wall.
+
+Switch with `EMBEDDING_BACKEND=sentence-transformers` in `.env`, then
+re-run ingestion: vectors from different runtimes are near-identical but
+should never be mixed in one index.
 """
 
 from __future__ import annotations
@@ -16,63 +33,130 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import numpy as np
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_model: Any = None
+# The only model Chroma ships as an ONNX export.
+ONNX_MODEL = "all-MiniLM-L6-v2"
+
+_backend: "_Backend | None" = None
 
 
 class EmbeddingError(RuntimeError):
     """The embedding model could not be loaded or used."""
 
 
-def get_model() -> Any:
-    """Load the sentence-transformer model once and reuse it.
+class _Backend:
+    """Common shape for the two runtimes."""
 
-    The first call downloads the weights if they are not cached and takes a
-    few seconds. Subsequent calls are instant.
+    name: str
+
+    def encode(self, texts: list[str]) -> np.ndarray:  # pragma: no cover - interface
+        raise NotImplementedError
+
+
+class _OnnxBackend(_Backend):
+    name = "onnx"
+
+    def __init__(self) -> None:
+        model = settings.embedding_model.split("/")[-1]
+        if model != ONNX_MODEL:
+            raise EmbeddingError(
+                f"The ONNX backend only provides {ONNX_MODEL}, but "
+                f"EMBEDDING_MODEL is {settings.embedding_model!r}. Use "
+                f"EMBEDDING_BACKEND=sentence-transformers for other models."
+            )
+        try:
+            from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+        except Exception as exc:
+            raise EmbeddingError(f"ONNX runtime unavailable: {exc}") from exc
+        self._fn = ONNXMiniLM_L6_V2()
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        return np.asarray(self._fn(texts), dtype=np.float32)
+
+
+class _SentenceTransformersBackend(_Backend):
+    name = "sentence-transformers"
+
+    def __init__(self) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except Exception as exc:
+            # Catches OSError as well as ImportError. A DLL refused by the
+            # operating system raises OSError at import time, and an
+            # ImportError-only handler lets it escape as an "unexpected"
+            # failure — which is exactly what happened before this change.
+            raise EmbeddingError(
+                f"sentence-transformers could not be loaded: {type(exc).__name__}: {exc}"
+            ) from exc
+        try:
+            self._model = SentenceTransformer(settings.embedding_model)
+        except Exception as exc:
+            raise EmbeddingError(
+                f"Could not load embedding model {settings.embedding_model!r}: {exc}"
+            ) from exc
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        return self._model.encode(texts, batch_size=32, convert_to_numpy=True)
+
+
+BACKENDS: dict[str, type[_Backend]] = {
+    "onnx": _OnnxBackend,
+    "sentence-transformers": _SentenceTransformersBackend,
+}
+
+
+def get_backend() -> _Backend:
+    """Load the configured runtime once and reuse it."""
+    global _backend
+    if _backend is not None:
+        return _backend
+
+    choice = settings.embedding_backend.lower().strip()
+    backend_cls = BACKENDS.get(choice)
+    if backend_cls is None:
+        raise EmbeddingError(
+            f"Unknown EMBEDDING_BACKEND {choice!r}. Choose from: {', '.join(BACKENDS)}"
+        )
+
+    logger.info("Loading embedding model %s via %s", settings.embedding_model, choice)
+    _backend = backend_cls()
+    return _backend
+
+
+def _normalise(vectors: np.ndarray) -> np.ndarray:
+    """L2-normalise rows.
+
+    Done here, for both backends, rather than trusting each runtime's own
+    option. Normalised vectors make cosine similarity a dot product and
+    keep scores in a predictable range, and the retrieval threshold was
+    calibrated on exactly that range.
     """
-    global _model
-    if _model is not None:
-        return _model
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    return vectors / norms
 
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError as exc:  # pragma: no cover - dependency is declared
-        raise EmbeddingError(
-            f"sentence-transformers is not installed: {exc}"
-        ) from exc
 
-    logger.info("Loading embedding model %s", settings.embedding_model)
+def _encode(texts: list[str]) -> np.ndarray:
     try:
-        _model = SentenceTransformer(settings.embedding_model)
+        vectors = get_backend().encode(texts)
+    except EmbeddingError:
+        raise
     except Exception as exc:
-        raise EmbeddingError(
-            f"Could not load embedding model {settings.embedding_model!r}: {exc}"
-        ) from exc
-    return _model
+        raise EmbeddingError(f"Embedding failed: {type(exc).__name__}: {exc}") from exc
+    return _normalise(np.atleast_2d(vectors))
 
 
 def embed_documents(texts: list[str], *, show_progress: bool = False) -> list[list[float]]:
-    """Embed a batch of document chunks for storage.
-
-    Vectors are L2-normalised, which makes cosine similarity equivalent to
-    a dot product and keeps scores in a predictable 0-1 range. The
-    retrieval layer's score threshold depends on that.
-    """
+    """Embed a batch of document chunks for storage."""
     if not texts:
         return []
-
-    model = get_model()
-    vectors = model.encode(
-        texts,
-        batch_size=32,
-        show_progress_bar=show_progress,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-    )
-    return [v.tolist() for v in vectors]
+    del show_progress  # batches are small enough that progress adds nothing
+    return [v.tolist() for v in _encode(texts)]
 
 
 def embed_query(text: str) -> list[float]:
@@ -80,28 +164,17 @@ def embed_query(text: str) -> list[float]:
 
     Kept separate from `embed_documents` even though the implementation is
     currently identical. Asymmetric models (E5, BGE, GTE) require different
-    prefixes for queries and passages, so if the model is ever swapped, the
+    prefixes for queries and passages, so if the model is ever swapped the
     distinction is already in place at every call site.
     """
-    model = get_model()
-    vector = model.encode(
-        text,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-    )
-    return vector.tolist()
+    return _encode([text])[0].tolist()
 
 
 def embedding_dimension() -> int:
-    """Report the model's output dimension, for diagnostics.
-
-    The accessor was renamed in sentence-transformers 6; both spellings are
-    tried so the project works across versions.
-    """
-    model = get_model()
-    for attribute in ("get_embedding_dimension", "get_sentence_embedding_dimension"):
-        accessor = getattr(model, attribute, None)
-        if callable(accessor):
-            return int(accessor())
-    # Last resort: embed something trivial and measure the result.
+    """Report the output dimension, for diagnostics."""
     return len(embed_query("dimension probe"))
+
+
+def backend_name() -> str:
+    """Which runtime is in use, for `/health` and ingestion reports."""
+    return get_backend().name

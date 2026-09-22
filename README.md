@@ -39,7 +39,8 @@ The real diagram is generated from the compiled graph — see
 
 - **LangGraph** — agent orchestration as an explicit, inspectable graph
 - **Groq** (`openai/gpt-oss-120b`) — LLM inference, free tier
-- **sentence-transformers** — embeddings computed locally, no API calls
+- **all-MiniLM-L6-v2 on ONNX Runtime** — embeddings computed locally, no
+  API calls, no PyTorch (`sentence-transformers` available as an option)
 - **ChromaDB** — persisted local vector store
 - **FastAPI** — HTTP layer with auto-generated interactive docs
 - **SQLite** — analytics logging
@@ -179,6 +180,25 @@ hard to diagnose.
 **Why local embeddings.** Embedding a few hundred chunks through an API
 means a key, a bill and a rate limit. `all-MiniLM-L6-v2` runs on CPU in
 seconds and makes the project work offline.
+
+**Why ONNX rather than PyTorch.** The project began on
+`sentence-transformers`. Mid-build, Windows Smart App Control started
+refusing PyTorch's unsigned `c10.dll` (`WinError 4551`), and every
+inquiry failed. The system degraded as designed — patients were told
+search was unavailable rather than shown a stack trace — but "disable an
+OS security feature" is not an acceptable install step, and anyone
+cloning onto a locked-down Windows machine would hit the same wall.
+
+The fix changed the runtime, not the model: Chroma ships
+`all-MiniLM-L6-v2` as an ONNX export on Microsoft's signed
+`onnxruntime`. Before switching, the new vectors were compared against
+the stored PyTorch ones for all 74 chunks — cosine similarity 1.000000
+throughout — so the retrieval threshold calibrated earlier remains
+valid. Side effects, all good: PyTorch (~1.5 GB) is no longer a required
+dependency, and ingestion dropped from minutes to 8 seconds.
+`sentence-transformers` remains available via `requirements-torch.txt`
+and `EMBEDDING_BACKEND=sentence-transformers`, for models ONNX does not
+cover.
 
 **Chunking strategy.** Chunks are split on markdown headings rather than a
 fixed character count, so each chunk is a unit the author already decided

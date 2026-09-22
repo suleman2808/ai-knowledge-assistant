@@ -52,6 +52,9 @@ class Settings(BaseSettings):
 
     # --- Embeddings ------------------------------------------------------
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # "onnx" (default, no PyTorch) or "sentence-transformers". Same model,
+    # same vectors; see app/rag/embeddings.py for why ONNX is the default.
+    embedding_backend: str = "onnx"
 
     # --- Storage ---------------------------------------------------------
     chroma_dir: Path = Path("data/chroma")

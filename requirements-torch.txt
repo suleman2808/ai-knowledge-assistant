@@ -1,0 +1,18 @@
+# Optional: the PyTorch embedding runtime.
+#
+# Not needed by default. The project embeds with all-MiniLM-L6-v2 on
+# onnxruntime, which produces identical vectors (cosine 1.000000 across the
+# whole corpus) without a ~1.5 GB PyTorch install.
+#
+# Install this only to use a different Hugging Face embedding model:
+#
+#     pip install -r requirements-torch.txt
+#
+# then set EMBEDDING_BACKEND=sentence-transformers in .env and re-run
+# `python -m scripts.ingest`.
+#
+# On Windows with Smart App Control enabled, PyTorch's unsigned DLLs may be
+# blocked (WinError 4551). That is the reason ONNX is the default.
+
+-r requirements.txt
+sentence-transformers>=3.3.0
