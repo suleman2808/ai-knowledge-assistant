@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     # --- Retrieval -------------------------------------------------------
     retrieval_top_k: int = Field(default=4, ge=1, le=20)
     retrieval_min_score: float = Field(default=0.30, ge=0.0, le=1.0)
+    # "hybrid" (vector plus BM25 keyword search) or "vector".
+    retrieval_mode: str = "hybrid"
 
     # --- Google Calendar -------------------------------------------------
     google_credentials_file: Path = Path("credentials.json")
