@@ -23,7 +23,8 @@ from __future__ import annotations
 import logging
 
 from app.agents.base import AgentResponse, failure
-from app.llm import LLMError, complete_verbose
+from app.config import settings
+from app.llm import LLMError, complete, complete_verbose
 from app.prompts import render
 from app.rag.retriever import RetrievalResult, RetrievalStatus, retrieve
 
@@ -88,6 +89,52 @@ def _format_history(history: list[dict[str, str]] | None) -> str:
     return "\n".join(lines) if lines else "(this is the first message)"
 
 
+def _standalone_question(
+    question: str, history: list[dict[str, str]] | None
+) -> tuple[str, bool]:
+    """Rewrite a follow-up into a question that can be searched on its own.
+
+    Retrieval sees only the text it is given. "Is that for one surface?"
+    retrieves nothing useful, because the word that gives it meaning —
+    "filling" — is in the previous turn. Found by the analytics report:
+    both follow-up questions in the seeded data were logged as knowledge
+    gaps despite the documents answering them.
+
+    Only runs when there is history, so a first message costs no extra
+    call. Uses the small model: this is reformulation, not reasoning.
+
+    Returns:
+        `(query_for_retrieval, was_rewritten)`. Falls back to the original
+        on any failure — a rewrite is an improvement, never a dependency.
+    """
+    if not history:
+        return question, False
+
+    try:
+        rewritten = complete(
+            render(
+                "inquiry_rewrite",
+                history=_format_history(history),
+                message=question,
+            ),
+            model=settings.router_model,
+            reasoning_effort=settings.router_reasoning_effort,
+            max_tokens=300,
+            temperature=0.0,
+        )
+    except LLMError as exc:
+        logger.warning("Query rewrite failed, searching the original: %s", exc)
+        return question, False
+
+    rewritten = rewritten.strip().strip("\"'").splitlines()[0].strip() if rewritten else ""
+    # Guard against the model answering instead of rewriting, or padding
+    # the query with invented detail. A standalone question is rarely more
+    # than a few times longer than the follow-up it came from.
+    if not rewritten or len(rewritten) > max(200, len(question) * 6):
+        return question, False
+    return rewritten, rewritten.lower() != question.lower()
+
+
 def _refusal_for(result: RetrievalResult) -> AgentResponse:
     """Map a non-OK retrieval status onto a user-facing response.
 
@@ -134,14 +181,18 @@ def answer_inquiry(
         answer came from retrieved documents; when it is False the answer
         is a refusal, never an ungrounded guess.
     """
-    result = retrieve(question)
+    search_query, rewritten = _standalone_question(question, history)
+    result = retrieve(search_query)
 
     if not result.grounded:
         logger.info(
             "Inquiry not grounded (%s, best=%.3f): %s",
-            result.status.value, result.best_score, question[:80],
+            result.status.value, result.best_score, search_query[:80],
         )
-        return _refusal_for(result)
+        response = _refusal_for(result)
+        if rewritten:
+            response.metadata["search_query"] = search_query
+        return response
 
     prompt = render(
         "inquiry_user",
@@ -177,6 +228,7 @@ def answer_inquiry(
             metadata={
                 "grounded": False,
                 "refused_by": "model",
+                "search_query": search_query if rewritten else None,
                 "retrieval_status": result.status.value,
                 "best_score": round(result.best_score, 3),
                 "retrieved": [c.breadcrumb for c in result.chunks],
@@ -191,6 +243,7 @@ def answer_inquiry(
         sources=result.sources,
         metadata={
             "grounded": True,
+            "search_query": search_query if rewritten else None,
             "retrieval_status": result.status.value,
             "best_score": round(result.best_score, 3),
             "retrieved": [c.breadcrumb for c in result.chunks],

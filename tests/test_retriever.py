@@ -29,9 +29,20 @@ class FakeCollection:
     def __init__(self, rows: list[tuple[str, str, str, float]]) -> None:
         self.rows = rows
         self.last_n_results: int | None = None
+        self.name = f"fake-{id(self)}"
 
     def count(self) -> int:
         return len(self.rows)
+
+    def get(self, *, include):  # noqa: ANN001, ARG002
+        """Full scan, used to build the keyword index."""
+        return {
+            "ids": [r[0] for r in self.rows],
+            "documents": [r[1] for r in self.rows],
+            "metadatas": [{"breadcrumb": r[2], "heading_path": r[2],
+                           "source": "doc.md"} for r in self.rows],
+            "embeddings": None,
+        }
 
     def query(self, *, query_embeddings, n_results, include):  # noqa: ANN001
         self.last_n_results = n_results
@@ -66,7 +77,10 @@ class BrokenCollection:
 @pytest.fixture(autouse=True)
 def _stub_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
     """Avoid loading the real model; the vector value is irrelevant here."""
+    from app.rag import retriever
+
     monkeypatch.setattr("app.rag.retriever.embed_query", lambda _text: [0.0] * 384)
+    retriever._lexical_cache.clear()
 
 
 def test_returns_chunks_above_the_threshold() -> None:
