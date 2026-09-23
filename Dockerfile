@@ -1,8 +1,8 @@
 # Container image for the assistant.
 #
-# Built for Hugging Face Spaces (free CPU tier), which serves on port
-# 7860 and runs the container as uid 1000. It is an ordinary image
-# otherwise and runs anywhere Docker does.
+# One image, any host. Hugging Face Spaces serves on a fixed port 7860;
+# Render, Railway, Fly and Cloud Run inject a PORT variable and kill a
+# container that ignores it. docker-entrypoint.sh reconciles the two.
 #
 # The knowledge base is built at image build time rather than on boot:
 # ingestion needs no API key, only the local embedding model, so baking
@@ -32,7 +32,7 @@ COPY --chown=app:app . .
 # so the first request does not pay for a 79 MB download.
 RUN python -m scripts.ingest --quiet
 
-# Spaces expects 7860; APP_PORT keeps the local default of 8000 intact.
+# The default port when a host does not specify one.
 ENV APP_HOST=0.0.0.0 \
     APP_PORT=7860
 EXPOSE 7860
@@ -40,6 +40,6 @@ EXPOSE 7860
 # A container that reports its own health, so an orchestrator can tell
 # "starting" from "broken" without guessing.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7860/api/health', timeout=4).status==200 else 1)"
+    CMD python -c "import os,urllib.request,sys; port=os.environ.get('PORT') or os.environ.get('APP_PORT','7860'); sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{port}/api/health', timeout=4).status==200 else 1)"
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["./docker-entrypoint.sh"]

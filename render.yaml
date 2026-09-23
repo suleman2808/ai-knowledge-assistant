@@ -1,0 +1,18 @@
+# Render blueprint. Import the repository at render.com and this
+# configures the service, so the only manual step is pasting the API key.
+#
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: ai-knowledge-assistant
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # sync: false means Render prompts for the value and stores it as a
+      # secret rather than reading it from this file. The key is never
+      # committed.
+      - key: GROQ_API_KEY
+        sync: false

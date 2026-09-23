@@ -176,10 +176,16 @@ docker run --rm -p 7860:7860 -e GROQ_API_KEY=gsk_... dental-assistant
 ```
 
 The image builds the vector store at build time, so the container starts
-ready to answer. See [docs/deployment.md](docs/deployment.md) for
-Hugging Face Spaces, and for what does *not* survive a deployment —
-Google Calendar (the OAuth token is deliberately not committed) and the
-analytics database (ephemeral on free hosts).
+ready to answer, and it runs on ~290 MB — which fits every free tier.
+`render.yaml` makes Render a one-click import; Hugging Face Spaces is
+configured by the front matter at the top of this file. The same image
+serves both: `docker-entrypoint.sh` uses `PORT` where the host injects
+one and a fixed port where it does not.
+
+See [docs/deployment.md](docs/deployment.md) for both, and for what does
+*not* survive a deployment — Google Calendar (the OAuth token is
+deliberately not committed) and the analytics database (ephemeral on
+free hosts).
 
 ## Optional: the PyTorch embedding runtime
 
