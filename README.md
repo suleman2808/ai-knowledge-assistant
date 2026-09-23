@@ -157,6 +157,19 @@ python -m scripts.google_auth --check  # verify, list free slots
 python -m scripts.google_auth --revoke # back to the in-memory calendar
 ```
 
+## Deployment
+
+```bash
+docker build -t dental-assistant .
+docker run --rm -p 7860:7860 -e GROQ_API_KEY=gsk_... dental-assistant
+```
+
+The image builds the vector store at build time, so the container starts
+ready to answer. See [docs/deployment.md](docs/deployment.md) for
+Hugging Face Spaces, and for what does *not* survive a deployment —
+Google Calendar (the OAuth token is deliberately not committed) and the
+analytics database (ephemeral on free hosts).
+
 ## Optional: the PyTorch embedding runtime
 
 The default runtime is ONNX, which needs no PyTorch. To use a different
