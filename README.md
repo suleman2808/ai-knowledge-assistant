@@ -103,7 +103,8 @@ python -m scripts.inspect_chunks --show 2
 
 ```bash
 python -m scripts.search "how much is a root canal"
-python -m scripts.search --calibrate
+python -m scripts.search --calibrate          # threshold calibration
+python -m scripts.eval_retrieval --compare    # vector vs hybrid, measured
 ```
 
 ## Project layout
@@ -196,6 +197,68 @@ hard to diagnose.
 **Why local embeddings.** Embedding a few hundred chunks through an API
 means a key, a bill and a rate limit. `all-MiniLM-L6-v2` runs on CPU in
 seconds and makes the project work offline.
+
+**Hybrid search: vector plus BM25.** Vector search matches by meaning,
+which is its strength and its blind spot. "my tooth got knocked out"
+finds a section titled "First Aid" with no shared words; "do you take
+cigna" scored 0.23 against the page that literally lists *Cigna Dental
+PPO*, because an embedding model gives a brand name little semantic
+weight. BM25 is the complement — it scores exact term overlap and
+weights rare terms heavily. The two rankings are combined by Reciprocal
+Rank Fusion, which works on ranks rather than raw scores, because cosine
+similarity and BM25 scores live on unrelated scales and cannot
+meaningfully be added. BM25 is implemented directly (~60 lines) rather
+than pulled in as a dependency, because the algorithm is short and worth
+being able to read.
+
+Measured on 28 labelled questions (`scripts/eval_retrieval.py`):
+
+| | vector only | hybrid |
+| --- | --- | --- |
+| hit@1 | 68% | 79% |
+| hit@k | 79% | 93% |
+| MRR | 0.720 | 0.848 |
+| out-of-scope admitted | 3/8 | 3/8 |
+
+**How a keyword hit earns the right to bypass the threshold.** Three
+conditions: top-two BM25 rank, a matched term appearing in at most three
+chunks, and IDF coverage of at least 0.575 — the share of the query's
+information that the chunk actually matched.
+
+The coverage condition exists because the first version did not have it,
+and doubled out-of-scope false positives from 3/8 to 6/8: "renew my
+**car** insurance" matched *"surface **car** park"*, "**reset** my email
+password" matched *"benefits **reset** on 1 January"*. A rare word that
+merely appears in a question is not the same as a rare word that *is*
+the question. Vector score does not separate those cases — the correct
+aetna hit scores 0.08 while the wrong cinema hit scores 0.23 — but IDF
+coverage does: legitimate hits measured 0.63–1.00, coincidental ones
+0.21–0.52. The cut-off is the midpoint of that gap, fitted on 14
+examples, so it is calibrated rather than proven.
+
+A known limitation, covered by a test: query words absent from every
+document get maximal IDF, which is exactly what correctly sinks
+"**renew** my car insurance", but also means unfamiliar slang lowers
+coverage. It fails safe — back to vector search, at worst a refusal,
+never a false answer.
+
+**Follow-up questions are rewritten before retrieval.** "Is that for one
+surface?" retrieves nothing useful, because the word carrying the
+meaning — "filling" — is in the previous turn. The Inquiry Agent
+rewrites follow-ups into standalone questions using the small model,
+only when history exists, so a first message costs no extra call. It
+falls back to the original query on any failure, and rejects a rewrite
+that is suspiciously long, which is what a model answering instead of
+rewriting produces.
+
+**"I don't know" must not mean "the answer depends".** "What's the
+cancellation fee if I cancel tomorrow?" retrieved the right section
+first, and the model refused anyway, because "tomorrow" does not say how
+many hours' notice that is. The grounding rule now distinguishes a
+question the material cannot answer from one whose answer depends on a
+detail the patient omitted — the latter gets the rule for each case.
+Refusing there withholds an answer the clinic has written down, which is
+the opposite of what the rule is for.
 
 **Contact details are redacted before anything reaches disk.** Analytics
 needs *what* patients asked, not *who* asked. Phone numbers and emails
