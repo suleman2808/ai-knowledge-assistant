@@ -430,10 +430,26 @@ def retrieve(
         )
 
     selected = _diversify(above)[:k]
+
+    # Say *how* chunks qualified. With hybrid search a chunk can be
+    # included on a keyword match while scoring well below the threshold,
+    # and a detail line claiming "at or above 0.30" beside a score of
+    # 0.129 sends whoever reads the log looking for a bug that is not
+    # there.
+    by_keyword = sum(1 for c in selected if c.matched_terms)
+    if by_keyword:
+        terms = sorted({t for c in selected for t in c.matched_terms})
+        detail = (
+            f"{len(selected)} chunk(s): {len(selected) - by_keyword} above "
+            f"{threshold:.2f}, {by_keyword} by keyword match on {', '.join(terms)}."
+        )
+    else:
+        detail = f"{len(selected)} chunk(s) at or above {threshold:.2f}."
+
     return RetrievalResult(
         query=query,
         status=RetrievalStatus.OK,
         chunks=selected,
         best_score=best_score,
-        detail=f"{len(selected)} chunk(s) at or above {threshold:.2f}.",
+        detail=detail,
     )
