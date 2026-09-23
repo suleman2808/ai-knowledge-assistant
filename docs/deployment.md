@@ -3,12 +3,26 @@
 The project runs as a single container: FastAPI serves the API, the chat
 UI and the dashboard, with the vector store baked into the image.
 
+## What it needs
+
+Measured on a running instance, after loading the embedding model and
+answering a question: **~290 MB resident**. Ingestion needs a little
+more, and the image is around 700 MB.
+
+That number is the ONNX switch paying off twice. On PyTorch the
+footprint was roughly 1 GB, which ruled out every 512 MB free tier. At
+290 MB the app fits comfortably on Hugging Face Spaces, Render, Fly.io
+or a small VPS.
+
 ## Hugging Face Spaces (free)
 
-Spaces is the right free host here because the app needs ~1 GB of RAM to
-hold the embedding model. Render's free tier gives 512 MB and the
-container is killed during startup; Spaces gives 16 GB on the free CPU
-tier.
+The easiest free option: 16 GB on the free CPU tier, Docker support, and
+secrets that arrive as environment variables.
+
+**Free Space quota requires a verified email.** Without it the Space is
+created but never builds, and the API reports
+`Quota exceeded for flavor cpu-basic (requested=1): current=0, limit=0`
+— which reads like a capacity problem rather than an account one.
 
 ### 1. Create the Space
 
@@ -69,6 +83,19 @@ dependency layer is cached.
 Free Spaces sleep after 48 hours of inactivity and wake on the next
 request, which takes about 30 seconds. Worth knowing before sending a
 client a link cold.
+
+## Other hosts
+
+Any of these work at ~290 MB:
+
+| Host | Free tier | Notes |
+| --- | --- | --- |
+| **Render** | 512 MB | Sleeps after 15 min idle; ~50s cold start |
+| **Fly.io** | 256 MB shared | Tight — use a 512 MB machine |
+| **Railway** | trial credit | No sleeping while credit lasts |
+| **Any VPS** | — | 1 GB is plenty |
+
+All read `GROQ_API_KEY` from the environment and need no code change.
 
 ## Notes for any host
 
