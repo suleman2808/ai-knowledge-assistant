@@ -14,15 +14,42 @@ footprint was roughly 1 GB, which ruled out every 512 MB free tier. At
 290 MB the app fits comfortably on Hugging Face Spaces, Render, Fly.io
 or a small VPS.
 
+## Render (free)
+
+The quickest route, because it authenticates with the GitHub account the
+repository already lives in.
+
+1. [render.com](https://render.com) → **Get Started** → sign in with GitHub
+2. **New +** → **Blueprint**, and select this repository — `render.yaml`
+   configures the service
+3. When prompted for `GROQ_API_KEY`, paste the key from
+   console.groq.com. Render stores it as a secret.
+4. **Apply**
+
+Or without the blueprint: **New +** → **Web Service** → pick the repo →
+runtime **Docker**, instance type **Free**, then add `GROQ_API_KEY` under
+Environment.
+
+Render injects a `PORT` variable and kills any container that does not
+listen on it — the message is "no open ports detected", which does not
+say why. `docker-entrypoint.sh` prefers `PORT` and falls back to
+`APP_PORT`, so the same image serves both Render and Spaces.
+
+Free services sleep after 15 minutes of inactivity and take about 50
+seconds to wake. Open the link yourself before sending it to anyone.
+
 ## Hugging Face Spaces (free)
 
 The easiest free option: 16 GB on the free CPU tier, Docker support, and
 secrets that arrive as environment variables.
 
 **Free Space quota requires a verified email.** Without it the Space is
-created but never builds, and the API reports
+created, accepts a push and shows the right SDK, but never builds. The
+API reports
 `Quota exceeded for flavor cpu-basic (requested=1): current=0, limit=0`
-— which reads like a capacity problem rather than an account one.
+— `limit=0` is the tell: the account has no entitlement at all, so it is
+an account problem wearing the costume of a capacity problem. Nothing in
+the repository can fix it.
 
 ### 1. Create the Space
 
