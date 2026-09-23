@@ -1,0 +1,17 @@
+# Normalise line endings so the repository stores LF regardless of who
+# commits from where. Without this, a Windows checkout re-commits whole
+# files with CRLF and every diff looks like a rewrite.
+* text=auto eol=lf
+
+# Windows-only files that must keep CRLF to run.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary: never touch.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
+*.sqlite3 binary
+*.db binary

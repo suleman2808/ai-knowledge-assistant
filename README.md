@@ -1,5 +1,9 @@
 # AI Knowledge Assistant — RAG + Multi-Agent Router
 
+[![tests](https://github.com/suleman2808/ai-knowledge-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/suleman2808/ai-knowledge-assistant/actions/workflows/tests.yml)
+[![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 A customer-facing assistant for a service business, built around one
 constraint: **it must not make things up about the business.** The demo
 domain is a dental clinic.
@@ -615,7 +619,8 @@ oversight.
 - Sessions and the in-memory calendar are lost on restart by design.
 - Groq's free tier has variable latency — typically 1–2s, occasionally
   10s+. The streamed progress hides most of it.
-- No CI. The suite runs in ~11 seconds and should run on push.
+- CI runs the suite on 3.11, 3.12 and 3.13, but not the fresh-clone
+  check, which needs an API key.
 
 # A note on the demo data
 
