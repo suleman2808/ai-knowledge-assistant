@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistant activity — Riverbend Dental Care</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="report">
+
+  <header>
+    <div class="mark" aria-hidden="true">R</div>
+    <div>
+      <h1>Assistant activity</h1>
+      <p id="window">last 30 days</p>
+    </div>
+    <div class="spacer"></div>
+    <a class="status" href="/">&larr; Back to chat</a>
+  </header>
+
+  <div id="body"></div>
+
+</div>
+
+<script>
+/* Reads /api/analytics and renders it. Same no-framework approach as the
+   chat page: one file, no build step, no CDN. */
+
+const escape = (s) => String(s)
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+
+const card = (n, k) => `<div class="card"><div class="n">${escape(n)}</div><div class="k">${escape(k)}</div></div>`;
+
+function bars(counts, total) {
+  return Object.entries(counts).map(([label, n]) => `
+    <div class="row">
+      <div>${escape(label)}</div>
+      <div class="track"><div class="fill" style="width:${total ? (100 * n / total) : 0}%"></div></div>
+      <div class="num">${n} &middot; ${total ? Math.round(100 * n / total) : 0}%</div>
+    </div>`).join('');
+}
+
+function render(d) {
+  document.getElementById('window').textContent = `last ${d.window_days} days`;
+
+  if (!d.turns) {
+    document.getElementById('body').innerHTML =
+      `<div class="panel"><h2>No conversations yet</h2>
+       <p class="note">Run <code>python -m scripts.seed_demo</code>, or use the chat.</p></div>`;
+    return;
+  }
+
+  const inq = d.inquiries;
+  const parts = [];
+
+  parts.push(`<div class="cards">
+    ${card(d.turns, 'messages')}
+    ${card(d.conversations, 'conversations')}
+    ${card(inq.answer_rate_pct === null ? '—' : inq.answer_rate_pct + '%', 'questions answered')}
+    ${card(d.bookings_made, 'appointments booked')}
+    ${card(d.escalations, 'escalated to a human')}
+    ${card(d.latency_ms.p50 === null ? '—' : (d.latency_ms.p50 / 1000).toFixed(1) + 's', 'median reply')}
+  </div>`);
+
+  parts.push(`<div class="panel"><h2>What patients wanted</h2>${bars(d.intents, d.turns)}</div>`);
+
+  if (d.knowledge_gaps.length) {
+    parts.push(`<div class="panel">
+      <h2>Knowledge gaps</h2>
+      <p class="note">Questions the assistant declined &mdash; things patients want to know
+      that the clinic&rsquo;s documents do not cover. Each one is a page worth writing.</p>
+      ${d.knowledge_gaps.map((g) => `<div class="gap">
+        <span>${escape(g.question)}</span>
+        <span class="times">${g.times > 1 ? `asked ${g.times}×` : 'asked once'}</span>
+      </div>`).join('')}
+    </div>`);
+  }
+
+  if (Object.keys(d.complaints_by_category).length) {
+    const total = Object.values(d.complaints_by_category).reduce((a, b) => a + b, 0);
+    parts.push(`<div class="panel"><h2>Complaints by category</h2>
+      ${bars(d.complaints_by_category, total)}</div>`);
+  }
+
+  parts.push(`<div class="panel"><h2>Service</h2>
+    <div class="row"><div>median</div><div class="track"><div class="fill" style="width:100%"></div></div>
+      <div class="num">${d.latency_ms.p50 ?? '—'} ms</div></div>
+    <div class="row"><div>95th pct</div><div class="track"><div class="fill" style="width:100%"></div></div>
+      <div class="num">${d.latency_ms.p95 ?? '—'} ms</div></div>
+    <p class="note" style="margin:12px 0 0">
+      ${d.fast_path_pct ?? 0}% answered with no model call &middot;
+      ${d.failure_rate_pct ?? 0}% failed &middot;
+      ${d.mixed_intent_turns} message(s) carried two intents
+    </p></div>`);
+
+  document.getElementById('body').innerHTML = parts.join('');
+}
+
+fetch('/api/analytics')
+  .then((r) => r.json())
+  .then(render)
+  .catch(() => {
+    document.getElementById('body').innerHTML =
+      `<div class="panel"><h2>Could not load analytics</h2>
+       <p class="note">Is the server running?</p></div>`;
+  });
+</script>
+</body>
+</html>
