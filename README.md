@@ -1,3 +1,14 @@
+---
+title: AI Knowledge Assistant
+emoji: 🦷
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # AI Knowledge Assistant — RAG + Multi-Agent Router
 
 [![tests](https://github.com/suleman2808/ai-knowledge-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/suleman2808/ai-knowledge-assistant/actions/workflows/tests.yml)
