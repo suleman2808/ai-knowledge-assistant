@@ -12,9 +12,9 @@ of three specialist agents:
 
 Every interaction is logged for analytics.
 
-> **Status:** under construction. Steps 1–7 of 10 complete (configuration,
+> **Status:** under construction. Steps 1–8 of 10 complete (configuration,
 > LLM abstraction, ingestion, retrieval, agents, router, Google Calendar,
-> analytics).
+> analytics, API and UI).
 
 ```
                       ┌─────────┐
@@ -143,6 +143,21 @@ python -m scripts.google_auth --check  # verify and list free slots
 python -m scripts.google_auth --revoke # back to the in-memory calendar
 ```
 
+## Running it
+
+```bash
+python -m app.main
+```
+
+| | |
+| --- | --- |
+| `http://127.0.0.1:8000/` | the chat UI |
+| `http://127.0.0.1:8000/analytics` | the activity dashboard |
+| `http://127.0.0.1:8000/docs` | interactive API documentation |
+
+One process serves the API and the UI, so there is one thing to run and
+one origin to trust.
+
 ## Analytics
 
 Every turn is recorded in SQLite (`data/analytics.db`, gitignored).
@@ -197,6 +212,41 @@ hard to diagnose.
 **Why local embeddings.** Embedding a few hundred chunks through an API
 means a key, a bill and a rate limit. `all-MiniLM-L6-v2` runs on CPU in
 seconds and makes the project work offline.
+
+**Conversation history lives on the server.** Clients send only the new
+message and a session id. A client-supplied transcript could be forged
+to make the assistant believe it had already said something it had not —
+and since follow-up rewriting reads that history, a forged transcript
+would steer retrieval too. Sessions are in-memory with a TTL, which is
+also a privacy decision: transcripts contain names, symptoms and
+complaints, and keeping them on disk without a retention policy creates
+a problem the project does not need.
+
+**Progress is streamed, because tokens cannot be.** The agents' model
+calls are not streamed, so there is nothing token-by-token to send. What
+the graph can report is which node is running — "working out what you
+need", then "searching the clinic's documents". A five-second wait with
+visible progress reads as work; the same wait with a blank screen reads
+as broken. Server-sent events carry those stages, then the finished
+answer.
+
+Once a stream has started, the status code is already 200, so a failure
+cannot be reported as a 500. It is delivered as an `error` event inside
+the stream instead, and a test covers that.
+
+**Every answer shows its provenance.** The UI badges each reply as
+*From clinic documents* or *Not in our documents*, with the cited
+sections expandable underneath. Grounding is the promise this project
+makes, so it is visible to the patient rather than buried in a
+developer console.
+
+**The UI has no framework, no build step and no CDN.** Roughly 300 lines
+of plain JavaScript, served by the same FastAPI process. That includes a
+small markdown renderer for the four things the model actually emits —
+bold, italics, inline code and bullet lists — because a library is ~40 KB
+for that, and everything it touches is escaped first. Model output is
+untrusted input: it derives from documents and from whatever a patient
+typed, so it is escaped before any of our own markup is added.
 
 **Hybrid search: vector plus BM25.** Vector search matches by meaning,
 which is its strength and its blind spot. "my tooth got knocked out"

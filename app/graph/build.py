@@ -287,3 +287,51 @@ def run(
 
         log_turn(turn, latency_ms=latency_ms)
     return turn
+
+
+def stream(
+    message: str,
+    *,
+    history: list[dict[str, str]] | None = None,
+    session_id: str = "",
+    log: bool = True,
+) -> Any:
+    """Run a turn, yielding progress as each node completes.
+
+    The agents' own LLM calls are not streamed, so there are no tokens to
+    emit. What the graph *can* report is which node is running, and that
+    turns out to be the more useful signal anyway: "routing", then
+    "searching the clinic's documents", then an answer. A five-second
+    wait with visible progress reads as work; the same wait with a blank
+    screen reads as broken.
+
+    Yields:
+        `{"event": "node", ...}` per completed node, then one
+        `{"event": "done", "turn": {...}}`.
+    """
+    started = time.perf_counter()
+    final: dict[str, Any] = {}
+
+    for update in get_graph().stream(
+        new_state(message, history=history, session_id=session_id),
+        stream_mode="updates",
+    ):
+        for node, delta in update.items():
+            delta = delta or {}
+            final.update(delta)
+            event = {"event": "node", "node": node}
+            for key in ("intent", "secondary_intent", "confidence", "routed_by"):
+                if key in delta:
+                    event[key] = delta[key]
+            yield event
+
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    turn = final.get("turn", {"answer": final.get("answer", ""), "intent": "unknown"})
+    turn["latency_ms"] = latency_ms
+
+    yield {"event": "done", "turn": turn}
+
+    if log:
+        from app.integrations.analytics import log_turn
+
+        log_turn(turn, latency_ms=latency_ms)
