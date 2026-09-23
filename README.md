@@ -115,6 +115,7 @@ python -m scripts.analytics_report
 # Diagnostics
 python -m scripts.list_models                  # what your key can reach
 python -m scripts.google_auth --check
+python -m scripts.verify_fresh_clone           # does it work for someone else?
 ```
 
 ## Project layout
@@ -133,7 +134,7 @@ app/
 data/documents/      The clinic's documents — the knowledge base
 ui/                  Chat page and dashboard
 scripts/             CLI entry points
-tests/               164 tests
+tests/               174 tests
 ```
 
 ## Optional: Google Calendar
@@ -166,13 +167,32 @@ python -m scripts.ingest
 ## Tests
 
 ```bash
-python -m pytest tests/ -q      # 164 tests, ~11s
+python -m pytest tests/ -q      # 174 tests, ~13s
 ```
 
 Every LLM call, vector store and calendar is stubbed, so the suite needs
 no key, no network and no ingested index. What is tested is the logic
 around the model — grounding enforcement, escalation rules, threshold
 behaviour, failure handling — rather than the model itself.
+
+The whole thing is also verified from a genuine fresh clone:
+
+```bash
+python -m scripts.verify_fresh_clone
+```
+
+A new checkout into a temporary directory, a new virtualenv,
+`requirements.txt` only, then the README's quickstart in order — smoke
+test, ingest, tests, CLI, server, and an HTTP request whose answer must
+come back grounded and cited. The clone is also checked for leaked
+secrets. The only thing carried across is the `.env` key, because that
+cannot be invented.
+
+This catches the failures that only happen to somebody else: a file that
+exists on the developer's machine but was never committed, a dependency
+installed by hand months ago, a setup step that lives only in somebody's
+memory. Running the app in the directory you built it in proves none of
+that.
 
 ---
 
