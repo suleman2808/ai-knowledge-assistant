@@ -26,3 +26,6 @@ Thumbs.db
 
 # Model cache (sentence-transformers downloads here if HF_HOME is set locally)
 .cache/
+
+# Streamlit secrets (the deployed app uses the platform UI instead)
+.streamlit/secrets.toml
