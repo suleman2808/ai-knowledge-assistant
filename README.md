@@ -641,8 +641,21 @@ oversight.
   out" never uses the word *extraction*, a vocabulary gap neither method
   bridges; and "which bus goes to the clinic" was a hybrid win given up
   when the coverage rule tightened.
-- No cross-encoder reranker. It is the standard next improvement and
-  would likely close both misses.
+- **Query expansion was tried for the first of those and removed.** A
+  curated map of patient phrasing to clinical terms ("tooth out" →
+  "extraction") fed into the keyword search changed the evaluation by
+  nothing at all: identical hit@1, hit@k and MRR. The reason is
+  instructive. `extraction` has an IDF of only 2.45 in this corpus —
+  it appears in several chunks, so it is not the distinctive term it
+  looks like — while the generic words in the query (`after`, `tooth`,
+  `out`, `avoid`) match every aftercare section equally. The right chunk
+  is also long, so BM25's length normalisation pushes it further down.
+  It never reached the top five. The map was deleted rather than kept
+  for the look of it.
+- No cross-encoder reranker. It is the standard next improvement and,
+  unlike expansion, it would address the actual cause: these misses need
+  a model that reads query and chunk *together*, not a better bag of
+  words.
 
 **Operational**
 
