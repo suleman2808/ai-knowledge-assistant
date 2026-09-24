@@ -25,6 +25,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from app.agents.base import AgentResponse, failure
+from app.agents.dates import resolve as resolve_relative_date
 from app.integrations.calendar import (
     Appointment,
     CalendarBackend,
@@ -229,14 +230,35 @@ def _offer_alternatives(
 
 
 def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> AgentResponse:
-    """Confirm a booking that has actually been written to the calendar."""
+    """Confirm a booking that has actually been written to the calendar.
+
+    The wording depends on where it was written. Against a real calendar
+    the clinic's reminder policy applies. Against the in-memory
+    fallback — which is what any deployed instance uses, because the
+    OAuth token is deliberately not committed — the booking exists only
+    in that process, and saying otherwise would be a lie the patient
+    discovers when nothing arrives. Observed in exactly that way: a
+    booking was made on the hosted demo and the confirmation promised
+    reminders that no part of this system can send.
+    """
     when = _format_slot(TimeSlot(appointment.start, appointment.end))
+
+    if backend_name == "in_memory":
+        closing = (
+            "This is a demonstration, so the appointment is held in memory "
+            "rather than written to the clinic's diary, and no reminder is "
+            "sent. Against a connected calendar it would be a real booking."
+        )
+    else:
+        closing = (
+            "We'll send a reminder three days before, and again on the "
+            "morning. If you need to change it, we ask for 48 hours' notice."
+        )
+
     return AgentResponse(
         answer=(
             f"You're booked in, {appointment.patient_name} — "
-            f"{appointment.summary.lower()} on {when}. "
-            f"We'll send a reminder three days before, and again on the morning. "
-            f"If you need to change it, we ask for 48 hours' notice."
+            f"{appointment.summary.lower()} on {when}. {closing}"
         ),
         agent=AGENT_NAME,
         success=True,
@@ -286,7 +308,21 @@ def handle_booking(
         return failure(AGENT_NAME, "llm_unavailable", str(exc), stage="extraction")
 
     service = (extracted.get("service") or "").strip() or None
-    booking_date = _parse_date(extracted.get("date"))
+
+    # The model reports the phrase; code resolves it. Where the two
+    # disagree, the function wins — it is arithmetic, and the model was
+    # observed booking "next Tuesday" a week late in production while
+    # getting the same phrase right in testing.
+    phrase = (extracted.get("date_phrase") or "").strip() or None
+    resolved = resolve_relative_date(phrase, today=today)
+    model_date = _parse_date(extracted.get("date"))
+
+    if resolved and model_date and resolved != model_date:
+        logger.info(
+            "Relative date %r resolved to %s; model said %s. Using %s.",
+            phrase, resolved, model_date, resolved,
+        )
+    booking_date = _parse_date(resolved.isoformat()) if resolved else model_date
     clock = _parse_time(extracted.get("time"))
     preference = extracted.get("time_preference")
     name = (extracted.get("patient_name") or "").strip() or None
@@ -298,6 +334,8 @@ def handle_booking(
     normalised = {
         "service": service,
         "date": booking_date.isoformat() if booking_date else None,
+        "date_phrase": phrase,
+        "date_resolved_in_code": bool(resolved),
         "time": f"{clock[0]:02d}:{clock[1]:02d}" if clock else None,
         "time_preference": preference,
         "patient_name": name,
