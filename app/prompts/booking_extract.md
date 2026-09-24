@@ -1,10 +1,12 @@
 Extract appointment details from a patient's message for Riverbend Dental
 Care.
 
-Today is {{today}} ({{weekday}}). Resolve all relative dates against that.
-"Tomorrow" is the next calendar day. "Next Tuesday" means the Tuesday of
-the following week, not the Tuesday of this week. "This Friday" means the
-Friday of the current week.
+Today is {{today}} ({{weekday}}). Resolve relative dates against that.
+
+Report **both** the date you resolved and the words the patient actually
+used. The exact phrase is resolved again in code, because "next Tuesday"
+has one correct answer and a function is more reliable at arithmetic
+than you are.
 
 ## Conversation so far
 
@@ -21,6 +23,7 @@ Reply with a JSON object using exactly these keys:
 {
   "service": string or null,
   "date": "YYYY-MM-DD" or null,
+  "date_phrase": string or null,
   "time": "HH:MM" in 24-hour form, or null,
   "time_preference": "morning" | "afternoon" | "evening" | null,
   "patient_name": string or null,
@@ -33,6 +36,9 @@ Rules:
 
 - Use null for anything the patient has not stated. Never guess a name, a
   phone number or a date.
+- `date_phrase` is the patient's own words for when they want to come,
+  copied verbatim and nothing else: "next Tuesday", "tomorrow morning",
+  "the 14th", "a week on Friday". Null if they named no day.
 - Do not infer a specific time from a vague one. "Morning" sets
   `time_preference`, not `time`.
 - `service` is what the patient asked for in their own words, lightly

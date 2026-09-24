@@ -535,3 +535,45 @@ def test_invisible_characters_are_stripped_from_answers() -> None:
     assert response.answer == "Call (503) 5550142 now"
     assert normalise("a‑b") == "a-b"
     assert normalise("a b") == "a b"
+
+
+def test_demo_booking_does_not_promise_reminders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Found on the hosted demo: a booking confirmed with "we'll send a
+    reminder", when the deployed instance uses the in-memory calendar and
+    nothing in this project sends email at all."""
+    target = next_weekday(1)
+    stub_extraction(
+        monkeypatch,
+        {"service": "cleaning", "date": target.isoformat(), "date_phrase": None,
+         "time": "14:00", "time_preference": None, "patient_name": "Sarah Chen",
+         "phone": "503-555-0180", "notes": None},
+    )
+
+    response = handle_booking("book it", backend=InMemoryCalendar(appointments=[]))
+
+    answer = response.answer.lower()
+    assert response.metadata["stage"] == "booked"
+    assert "we'll send a reminder" not in answer, "promises an action nothing performs"
+    assert "no reminder is sent" in answer
+    assert "demonstration" in answer
+
+
+def test_real_calendar_booking_keeps_the_clinic_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Against a connected calendar the reminder wording is accurate."""
+
+    class RealishCalendar(InMemoryCalendar):
+        name = "google"
+
+    target = next_weekday(1)
+    stub_extraction(
+        monkeypatch,
+        {"service": "cleaning", "date": target.isoformat(), "date_phrase": None,
+         "time": "14:00", "time_preference": None, "patient_name": "Sarah Chen",
+         "phone": "503-555-0180", "notes": None},
+    )
+
+    response = handle_booking("book it", backend=RealishCalendar(appointments=[]))
+
+    assert "reminder" in response.answer.lower()
