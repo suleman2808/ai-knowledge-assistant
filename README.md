@@ -11,9 +11,17 @@ license: mit
 
 # AI Knowledge Assistant — RAG + Multi-Agent Router
 
+**▶ [Try it live](https://ai-knowledge-assistant-original.streamlit.app/)**
+
 [![tests](https://github.com/suleman2808/ai-knowledge-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/suleman2808/ai-knowledge-assistant/actions/workflows/tests.yml)
 [![python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+[![demo](https://img.shields.io/badge/demo-streamlit-0f5c63)](https://ai-knowledge-assistant-original.streamlit.app/)
+
+Ask it something the clinic's documents cover ("how much is a root canal
+on a molar?"), and something they do not ("do you offer botox?"). It
+answers the first with a citation and declines the second — that
+difference is the whole point of the project.
 
 A customer-facing assistant for a service business, built around one
 constraint: **it must not make things up about the business.** The demo
