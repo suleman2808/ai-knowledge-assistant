@@ -146,6 +146,7 @@ app/
   graph/             LangGraph state, router and wiring
   rag/               Chunking, embeddings, BM25, vector store, retrieval
   integrations/      Calendar, analytics
+streamlit_app.py     Alternative front-end, for free hosting
 data/documents/      The clinic's documents — the knowledge base
 ui/                  Chat page and dashboard
 scripts/             CLI entry points
@@ -182,9 +183,18 @@ configured by the front matter at the top of this file. The same image
 serves both: `docker-entrypoint.sh` uses `PORT` where the host injects
 one and a fixed port where it does not.
 
-See [docs/deployment.md](docs/deployment.md) for both, and for what does
-*not* survive a deployment — Google Calendar (the OAuth token is
-deliberately not committed) and the analytics database (ephemeral on
+**Free hosting with no card.** Render and Hugging Face both turned out
+to want a payment method or an account upgrade. `streamlit_app.py` is a
+thin alternative front-end for Streamlit Community Cloud, which is free
+with no card and no quota — it calls the same `app.graph.run`, so the
+router, agents and retrieval are identical and there is no second copy
+of the logic. For demonstrating the *real* FastAPI UI, including live
+Google Calendar bookings, a Cloudflare quick tunnel exposes the local
+app with no account at all.
+
+See [docs/deployment.md](docs/deployment.md) for all of these, and for
+what does *not* survive a deployment — Google Calendar (the OAuth token
+is deliberately not committed) and the analytics database (ephemeral on
 free hosts).
 
 ## Optional: the PyTorch embedding runtime

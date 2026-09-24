@@ -14,10 +14,70 @@ footprint was roughly 1 GB, which ruled out every 512 MB free tier. At
 290 MB the app fits comfortably on Hugging Face Spaces, Render, Fly.io
 or a small VPS.
 
-## Render (free)
+## Streamlit Community Cloud (free, no card)
 
-The quickest route, because it authenticates with the GitHub account the
-repository already lives in.
+The only host tried here that is free with **no card, no quota and no
+sleep**. Render asks for a card even on its free tier, and a new Hugging
+Face account gets `cpu-basic` quota of zero, which cannot be raised
+without upgrading.
+
+The trade-off: it runs Streamlit apps only, so the interface is
+`streamlit_app.py` rather than the FastAPI app and the HTML UI. That
+file is deliberately thin — every decision still happens in
+`app.graph.run`, the same router, agents and retrieval. If the two
+front-ends ever disagree about behaviour, that is a bug in the Streamlit
+one.
+
+1. [share.streamlit.io](https://share.streamlit.io) → sign in with GitHub
+2. **Create app** → **Deploy a public app from GitHub**
+   - Repository: `suleman2808/ai-knowledge-assistant`
+   - Branch: `main`
+   - Main file path: `streamlit_app.py`
+3. **Advanced settings** → **Secrets**, paste:
+
+   ```toml
+   GROQ_API_KEY = "gsk_your_key_here"
+   ```
+
+4. **Deploy**
+
+First boot takes a few minutes: installing dependencies, then building
+the vector store, since Streamlit Cloud has no build step. The result is
+cached for the life of the container.
+
+The app reads secrets through `st.secrets` and copies them into the
+environment before `app.config` is imported, so nothing else in the
+project needs to know which platform it is on.
+
+## Cloudflare Tunnel (free, no account)
+
+For showing the **real** FastAPI UI — and real Google Calendar bookings,
+which no deployment can do, because the OAuth token is deliberately not
+committed.
+
+```bash
+# one terminal
+python -m app.main
+
+# another terminal
+cloudflared tunnel --url http://localhost:8000
+```
+
+`cloudflared` prints a public `https://<random>.trycloudflare.com` URL
+that works from anywhere while the command runs. No account, no card, no
+configuration. Download it from
+[Cloudflare's releases](https://github.com/cloudflare/cloudflared/releases)
+— a single executable.
+
+The link dies when the command stops, so this is for a live call rather
+than a CV.
+
+## Render — needs a card
+
+Render's free tier still requires a card on file (a $1 authorisation,
+not a charge). If that is acceptable, this is the smoothest route,
+because it authenticates with the GitHub account the repository already
+lives in.
 
 1. [render.com](https://render.com) → **Get Started** → sign in with GitHub
 2. **New +** → **Blueprint**, and select this repository — `render.yaml`
@@ -43,13 +103,15 @@ seconds to wake. Open the link yourself before sending it to anyone.
 The easiest free option: 16 GB on the free CPU tier, Docker support, and
 secrets that arrive as environment variables.
 
-**Free Space quota requires a verified email.** Without it the Space is
-created, accepts a push and shows the right SDK, but never builds. The
-API reports
-`Quota exceeded for flavor cpu-basic (requested=1): current=0, limit=0`
-— `limit=0` is the tell: the account has no entitlement at all, so it is
-an account problem wearing the costume of a capacity problem. Nothing in
-the repository can fix it.
+**A new account may get no free quota at all.** Verifying the email is
+not always enough. The API reports
+`Quota exceeded for flavor cpu-basic (requested=1): current=0, limit=0`,
+and the Space settings page says "You've reached your cpu-basic quota
+limit, please upgrade your account, or pause your previous Spaces" —
+even with a single Space and nothing else running. `limit=0` is the
+tell: no entitlement at all. It is an account problem wearing the
+costume of a capacity problem, and nothing in the repository can fix
+it.
 
 ### 1. Create the Space
 

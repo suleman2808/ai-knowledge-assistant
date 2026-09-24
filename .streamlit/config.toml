@@ -1,0 +1,10 @@
+# Matches the palette of the FastAPI chat UI in ui/styles.css, so the two
+# front-ends look like the same product.
+[theme]
+primaryColor = "#0f5c63"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6f8"
+textColor = "#16232e"
+
+[browser]
+gatherUsageStats = false
