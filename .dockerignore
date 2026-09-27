@@ -20,7 +20,6 @@ __pycache__/
 # Not needed at runtime.
 .git/
 .github/
-.claude/
 docs/
 tests/
 *.md

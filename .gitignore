@@ -18,7 +18,6 @@ venv/
 .ruff_cache/
 
 # Editors / OS
-.claude/settings.local.json
 .vscode/
 .idea/
 .DS_Store
