@@ -3,35 +3,146 @@
 
 /* ---------- the gate ---------- */
 
+/*
+ * The sign-in screen is the first thing anyone sees, so it is the one
+ * place here that is allowed to be atmospheric: two slow washes of the
+ * brand teal and its amber counterpart, blurred past the point of being
+ * shapes, under a card made of glass.
+ *
+ * The effect is built from colour and blur alone — no images, nothing
+ * to download — and it degrades honestly: a browser without
+ * `backdrop-filter` falls back to a solid card via @supports, and the
+ * drift stops entirely under `prefers-reduced-motion`.
+ */
+
 .gate {
+  position: relative; isolation: isolate;
   min-height: 100dvh; display: grid; place-items: center; padding: 24px;
-  background: var(--rail);
+  background: var(--gate-bg);
+  overflow: hidden;
 }
+
+:root {
+  --gate-bg: #e8e5e0;
+  --wash-a: rgba(13, 110, 118, .50);
+  --wash-b: rgba(203, 140, 48, .34);
+  --wash-c: rgba(32, 86, 128, .30);
+  --glass: rgba(255, 255, 255, .70);
+  --glass-line: rgba(255, 255, 255, .85);
+  --glass-sheen: rgba(255, 255, 255, .75);
+  --field: rgba(255, 255, 255, .55);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gate-bg: #0e0d0f;
+    --wash-a: rgba(26, 150, 160, .80);
+    --wash-b: rgba(188, 122, 40, .52);
+    --wash-c: rgba(46, 96, 150, .50);
+    --glass: rgba(42, 45, 48, .55);
+    --glass-line: rgba(255, 255, 255, .11);
+    --glass-sheen: rgba(255, 255, 255, .14);
+    --field: rgba(255, 255, 255, .06);
+  }
+}
+
+/* Two layers rather than one: they drift at different speeds, so the
+   colours keep rearranging instead of sliding as a single sheet. */
+.gate::before,
+.gate::after {
+  content: ""; position: absolute; z-index: -1;
+  inset: -30%;
+  filter: blur(72px);
+  pointer-events: none;
+}
+
+.gate::before {
+  background:
+    radial-gradient(42% 46% at 34% 38%, var(--wash-a) 0%, transparent 68%),
+    radial-gradient(38% 42% at 68% 32%, var(--wash-b) 0%, transparent 70%),
+    radial-gradient(46% 48% at 52% 72%, var(--wash-c) 0%, transparent 68%);
+  animation: drift-a 34s ease-in-out infinite alternate;
+}
+
+.gate::after {
+  background:
+    radial-gradient(34% 38% at 70% 62%, var(--wash-a) 0%, transparent 70%),
+    radial-gradient(30% 34% at 30% 58%, var(--wash-b) 0%, transparent 72%);
+  opacity: .8;
+  animation: drift-b 46s ease-in-out infinite alternate;
+}
+
+@keyframes drift-a {
+  from { transform: translate3d(-3%, -2%, 0) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) scale(1.12); }
+}
+@keyframes drift-b {
+  from { transform: translate3d(3%, 2%, 0) scale(1.08); }
+  to   { transform: translate3d(-4%, -3%, 0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate::before, .gate::after { animation: none; }
+}
+
+.gate > * { position: relative; }
+
+.gate .vignette {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(76% 72% at 50% 46%, transparent 38%, var(--gate-bg) 100%);
+  opacity: .9;
+}
+
 .gate-card {
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: 18px; box-shadow: var(--shadow-lift);
-  padding: 32px 30px; width: 100%; max-width: 360px;
+  position: relative;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  padding: 34px 32px; width: 100%; max-width: 372px;
   display: flex; flex-direction: column;
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, .22),
+    inset 0 1px 0 var(--glass-sheen);
 }
-.gate-card .mark { width: 36px; height: 36px; color: var(--brand); }
+
+/* A thin highlight along the top edge — the thing that reads as glass
+   rather than as a translucent rectangle. */
+.gate-card::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 1px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, transparent, var(--glass-sheen), transparent);
+  pointer-events: none;
+}
+
+/* Blur is a progressive enhancement. Without it, translucency alone
+   would put text over moving colour, so the card goes solid instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .gate-card { background: var(--surface); }
+}
+
+.gate-card .mark { width: 38px; height: 38px; color: var(--brand); }
 .gate-card .mark svg { width: 100%; height: 100%; display: block; }
-.gate-card h1 { font-size: 19px; margin: 16px 0 0; font-weight: 600; }
+.gate-card h1 { font-size: 20px; margin: 18px 0 0; font-weight: 600; }
 .gate-card .muted { margin: 5px 0 0; }
 
-.field { margin-top: 22px; }
+.field { margin-top: 24px; }
 .gate-card label {
   display: block; font-size: 12.5px; font-weight: 500;
   color: var(--muted); margin-bottom: 6px;
 }
 .gate-card input {
   width: 100%;
-  font: inherit; padding: 10px 13px;
-  border: 1px solid var(--line); border-radius: 10px;
+  font: inherit; padding: 11px 14px;
+  border: 1px solid var(--glass-line); border-radius: 11px;
   /* An input does not inherit colour, so a dark theme without these two
      lines gets black text on a dark field — which is how the password
      dots went invisible. */
-  background: var(--bg); color: var(--ink);
-  transition: border-color .15s ease;
+  background: var(--field); color: var(--ink);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
 .gate-card input::placeholder { color: var(--faint); }
 .gate-card input:focus {
@@ -39,21 +150,23 @@
   box-shadow: 0 0 0 3px var(--brand-soft);
 }
 .gate-card button {
-  margin-top: 16px; border: 0; border-radius: 10px; cursor: pointer;
+  margin-top: 18px; border: 0; border-radius: 11px; cursor: pointer;
   background: var(--brand); color: var(--on-brand);
-  font: inherit; font-weight: 500; padding: 11px;
-  transition: opacity .15s ease;
+  font: inherit; font-weight: 500; padding: 12px;
+  box-shadow: 0 6px 18px rgba(15, 92, 99, .28);
+  transition: transform .12s ease, box-shadow .15s ease;
 }
-.gate-card button:hover { opacity: .92; }
-.gate-card .error { margin: 14px 0 0; }
+.gate-card button:hover { transform: translateY(-1px); box-shadow: 0 9px 24px rgba(15, 92, 99, .34); }
+.gate-card button:active { transform: none; }
+.gate-card .error { margin: 16px 0 0; }
 .gate-foot {
-  margin: 18px 0 0; padding-top: 16px;
-  border-top: 1px solid var(--line-soft);
+  margin: 20px 0 0; padding-top: 18px;
+  border-top: 1px solid var(--glass-line);
   font-size: 11.5px; line-height: 1.5; color: var(--faint);
 }
 .gate-foot code {
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: var(--raised); padding: 1px 5px; border-radius: 4px;
+  background: var(--field); padding: 1px 5px; border-radius: 4px;
 }
 
 .muted { color: var(--muted); font-size: 13px; margin: 0; }
