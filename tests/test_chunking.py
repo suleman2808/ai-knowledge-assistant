@@ -15,7 +15,7 @@ from app.rag.chunking import (
 
 def test_splits_on_headings_not_character_count() -> None:
     """Each heading should own its own chunk."""
-    markdown = """# Clinic Handbook
+    markdown = """# Laboratory Handbook
 
 ## Opening Hours
 
@@ -30,8 +30,8 @@ collected from the reception desk before you leave the premises.
     chunks = chunk_markdown(markdown, source="handbook.md")
 
     breadcrumbs = [c.breadcrumb for c in chunks]
-    assert "Clinic Handbook > Opening Hours" in breadcrumbs
-    assert "Clinic Handbook > Parking" in breadcrumbs
+    assert "Laboratory Handbook > Opening Hours" in breadcrumbs
+    assert "Laboratory Handbook > Parking" in breadcrumbs
 
     hours = next(c for c in chunks if c.breadcrumb.endswith("Opening Hours"))
     assert "Parking" not in hours.text

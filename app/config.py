@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     # event, so setting this to the calendar owner produces no email and
     # no error. Empty disables confirmations entirely.
     clinic_email: str = ""
-    # The clinic's local time. All naive datetimes in the booking code are
+    # The laboratory's local time. All naive datetimes in the booking code are
     # wall-clock times in this zone; the Google integration is the only
     # place that converts to and from absolute time.
     clinic_timezone: str = "America/Los_Angeles"

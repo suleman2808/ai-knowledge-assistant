@@ -6,7 +6,7 @@ literals in the agent code, for three reasons:
 - They are the part of an LLM system most often edited, and editing a
   markdown file produces a readable diff rather than a wall of changed
   indentation inside a Python triple-quoted string.
-- They can be reviewed by someone who does not read Python. For a clinic,
+- They can be reviewed by someone who does not read Python. For a laboratory,
   the person who should sign off on what the assistant says to patients is
   not the person who wrote the agent.
 - Tuning a prompt becomes a content change, not a code change.

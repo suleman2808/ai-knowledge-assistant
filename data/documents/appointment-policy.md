@@ -1,98 +1,118 @@
-# Appointment Policy
+# Appointments and Collection
 
-## Booking an Appointment
+## Do I Need an Appointment?
 
-Appointments can be booked by telephone, by email, or through the online
-assistant on our website. New patients are asked to book by telephone for a
-first visit so we can take a brief medical history and allow the correct
-amount of time.
+For most tests, no. All three branches accept walk-ins during collection
+hours, and the usual wait is under fifteen minutes.
 
-We hold a small number of same-day slots for urgent problems. These are
-released at 8:00 AM each morning and are allocated by clinical need rather
-than on a first-come basis.
+Book ahead for:
 
-## Cancellation Policy
+- Fasting tests, so you are seen early and the fast is not prolonged
+- The glucose tolerance test, which occupies a chair for over two hours
+- Home sample collection
+- Any appointment where you need extra time or assistance
 
-We ask for **48 hours' notice** to cancel or reschedule.
+Mornings between 7:30 AM and 9:30 AM are the busiest, because most
+fasting patients arrive then. Walk in after 10:30 AM and you will usually
+be seen immediately.
 
-| Notice given | Fee |
+## Booking
+
+By telephone on (503) 555-0142, through the assistant on our website, or
+in person at any branch.
+
+We take: the test or panel you need, the branch, the day and time, your
+name and a contact number. If a doctor has requested the tests, bring the
+request form or a photograph of it.
+
+## Home Collection
+
+A phlebotomist comes to your address. $25 per visit, free on orders above
+$150, in Portland, Beaverton, Gresham, Tigard and Lake Oswego.
+
+Slots are 6:30 AM to 11:00 AM, Monday to Saturday. Book by 6:00 PM the
+day before on (503) 555-0146.
+
+The phlebotomist carries identification and will show it without being
+asked. Nobody from this laboratory will ever ask for payment in cash at
+your door — payment is taken when booking or afterwards by card.
+
+We cannot collect at home for the glucose tolerance test, which needs
+supervision, or for tests requiring immediate plating.
+
+## Cancellation
+
+Branch appointments can be cancelled or moved at any time at no charge.
+We hold a slot rather than a scarce resource, and a missed branch
+appointment costs us little.
+
+Home collection is different. A phlebotomist travels to you, and that
+journey cannot be reused.
+
+| Notice given for home collection | Fee |
 | --- | --- |
-| More than 48 hours | No charge |
-| 24 to 48 hours | No charge for the first occurrence, then $35 |
-| Less than 24 hours | $50 |
-| Failure to attend without notice | $75 |
+| More than 4 hours | No charge |
+| Less than 4 hours | $15 |
+| Nobody at the address | $25 |
 
-Fees for longer appointments — implant placement, surgical extraction, or
-any booking of 90 minutes or more — are charged at $100 rather than $50 or
-$75, because the time is difficult to fill at short notice.
-
-The fee is waived for genuine emergencies, illness, bereavement and severe
-weather. We do not ask for proof. Tell us what happened and we will apply
-the waiver. This is applied generously and we would rather occasionally be
-taken advantage of than penalise someone having a genuinely bad week.
-
-A cancellation fee must be settled before the next non-urgent appointment.
-
-## Repeated Non-Attendance
-
-After three missed appointments without notice in a twelve-month period, we
-may ask that future bookings be paid for in advance. This is uncommon and
-is always discussed with the patient first.
+The fee is waived for illness, a hospital admission, bereavement or
+severe weather. We do not ask for proof.
 
 ## Running Late
 
-If you arrive more than 15 minutes late, we may not be able to complete the
-planned treatment in the remaining time. Reception will tell you honestly
-whether it is better to proceed with a shortened appointment or rebook.
+If you arrive late for a branch appointment you are treated as a walk-in,
+which on a quiet morning means no wait at all.
 
-Rebooking in these circumstances is treated as a late cancellation only
-where it is a repeated pattern, not for a one-off.
+For the glucose tolerance test, arriving more than fifteen minutes late
+means rebooking. The test takes over two hours and cannot be started late
+in the collection window.
 
 ## When We Run Late
 
-Dentistry is not perfectly predictable and we occasionally run behind,
-usually because an earlier patient needed more care than expected. If we
-are running more than 20 minutes late we will tell you when you arrive, and
-offer you the choice to wait or rebook at no charge.
+If the wait exceeds thirty minutes we will tell you when you arrive and
+offer the option to come back later or go to another branch, with your
+place kept.
 
-If you have waited more than 30 minutes past your appointment time, please
-say so at reception. We would rather know.
+If you have been waiting more than thirty minutes without being told,
+please say so at reception. We would rather know.
 
-## Appointment Reminders
+## Reminders
 
-We send a reminder by text message and email three days before your
-appointment, and a second text on the morning of the appointment itself.
+We send a text message the evening before an appointment, including the
+fasting instruction where one applies, because that is the thing people
+forget.
 
-You can opt out of reminders at any time by replying STOP or by telling
-reception. Opting out does not exempt you from the cancellation policy, so
-we recommend keeping at least one reminder active.
+A second message goes out two hours before home collection, with the
+phlebotomist's first name.
 
-## New Patient Appointments
+Reply STOP to opt out at any time.
 
-Your first visit lasts about 45 minutes and includes a full examination,
-any necessary X-rays, an oral cancer screening and a written treatment plan
-with costs. Cleaning is not normally performed at the first visit, because
-the right type of cleaning depends on what the examination finds.
+## Doctor's Request Forms
 
-Please arrive 10 minutes early to complete a medical history form, or fill
-it in beforehand using the link in your confirmation email.
+Bring the form, or a clear photograph of it. If the tests are legible and
+the doctor's details are on it, that is enough.
 
-Bring a list of any medications you take, including supplements, and your
-insurance card if you have one.
+Where a request is unclear, our pathologist telephones the requesting
+doctor rather than guessing. This occasionally delays a sample by a day,
+and it is better than running the wrong test.
+
+You may also order tests without a doctor's request. Most tests in the
+catalogue are available directly, and we will say plainly when something
+needs a doctor's involvement.
 
 ## Children
 
-We see children from age three. A parent or legal guardian must attend the
-first appointment and remain in the building for all appointments for
-patients under 16.
+We collect from children of any age, including newborns, at Hawthorne and
+Beaverton. Gresham does not collect from children under two.
 
-For anxious children we offer a free introductory visit, with no treatment
-and no charge, where they can meet the dentist and sit in the chair. This
-is genuinely useful and we encourage it.
+A parent or legal guardian must be present for anyone under 18.
 
-## Waiting List for Earlier Appointments
+For an anxious child, ask for a longer slot when booking. There is no
+charge and it makes the difference between a quick draw and a bad
+experience that makes the next one harder.
 
-If your preferred time is unavailable, ask to be added to our cancellation
-list. We call patients on this list when a slot opens, often the same day.
-Roughly one in four patients on the list is seen earlier than their
-original booking.
+## Corporate and Bulk Testing
+
+Pre-employment screens and staff health checks can be arranged at your
+premises for groups of ten or more. Contact the practice manager on
+(503) 555-0142.

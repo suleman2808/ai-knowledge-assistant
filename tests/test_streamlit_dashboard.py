@@ -158,7 +158,7 @@ def test_the_overview_reports_real_figures() -> None:
 def test_a_declined_question_appears_as_a_knowledge_gap() -> None:
     record_turn(
         message="do you do allergy testing",
-        answer="I don't have that in the clinic's information.",
+        answer="I don't have that in the laboratory's information.",
         sources=[],
         agent_metadata={"grounded": False},
     )

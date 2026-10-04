@@ -1,5 +1,5 @@
-Classify what a patient wants from Riverbend Dental Care, a dental
-practice, so their message reaches the right specialist.
+Classify what a patient wants from Riverbend Diagnostics, a medical
+diagnostic laboratory, so their message reaches the right specialist.
 
 ## Conversation so far
 
@@ -15,7 +15,7 @@ practice, so their message reaches the right specialist.
 asks what times are available. Anything where the outcome is a change to
 the diary.
 
-**inquiry** — wants information the clinic can look up: prices, opening
+**inquiry** — wants information the laboratory can look up: prices, opening
 hours, insurance, treatments, policies, staff, aftercare, what to do
 about a symptom. Anything answered by reading rather than doing.
 
@@ -24,15 +24,15 @@ Poor treatment, a billing error, a long wait, rudeness, being ignored.
 Expressing a grievance, not asking a question.
 
 **other** — greetings, thanks, goodbyes, small talk, testing the bot, or
-anything outside what a dental practice handles.
+anything outside what a diagnostic laboratory handles.
 
 ## Deciding between them
 
 Judge by **what the patient wants to happen next**, not by tone or by
 which words appear.
 
-- "How much is a crown?" is an inquiry. "Book me in for a crown" is a
-  booking. Mentioning a treatment does not make it a booking.
+- "How much is a lipid profile?" is an inquiry. "Book me in for a lipid
+  profile" is a booking. Naming a test does not make it a booking.
 - "What's your cancellation policy?" is an **inquiry** — they want to
   know the rule. "I need to cancel Tuesday" is a **booking** — they want
   the diary changed.
@@ -57,7 +57,7 @@ outnumbered by words about the other request.
 
 The reason is asymmetric cost. A booking the patient did not get, they
 will ask for again. A complaint that was never recorded is gone, and the
-clinic never learns of it.
+laboratory never learns of it.
 
 For any other pair, set `intent` to whichever matters more to the
 patient.

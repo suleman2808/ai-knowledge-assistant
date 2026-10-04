@@ -59,7 +59,7 @@ RATE_WINDOW_SECONDS = 60
 class SessionStore:
     """In-memory conversation history.
 
-    Deliberately not persistent. A dental clinic's chat has no need to
+    Deliberately not persistent. A diagnostic laboratory's chat has no need to
     survive a restart, and keeping transcripts — which contain names,
     symptoms and complaints — on disk without a retention policy would
     create a data-protection problem the project does not need. Swapping
@@ -154,11 +154,11 @@ async def lifespan(app: FastAPI):  # noqa: ANN201, ARG001
 
 
 app = FastAPI(
-    title="Riverbend Dental Care — AI Assistant",
+    title="Riverbend Diagnostics — AI Assistant",
     description=(
         "A RAG assistant with a multi-agent router. An incoming message is "
         "classified and dispatched to a booking, inquiry or complaint "
-        "specialist. Inquiry answers are grounded in the clinic's documents "
+        "specialist. Inquiry answers are grounded in the laboratory's documents "
         "and refused when the documents do not cover the question."
     ),
     version="1.0.0",
@@ -187,7 +187,7 @@ async def _unhandled(request: Request, exc: Exception):  # noqa: ANN201
         content={
             "detail": (
                 "Something went wrong at our end. Please try again, or call "
-                "the clinic on (503) 555-0142."
+                "the laboratory on (503) 555-0142."
             )
         },
     )
@@ -322,7 +322,7 @@ def chat_stream(payload: ChatRequest, request: Request) -> Any:
                     {
                         "event": "error",
                         "detail": "Something went wrong at our end. Please try "
-                                  "again, or call the clinic on (503) 555-0142.",
+                                  "again, or call the laboratory on (503) 555-0142.",
                     }
                 )
                 + "\n\n"

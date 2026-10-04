@@ -4,7 +4,7 @@ Useful for judging retrieval quality and for calibrating the relevance
 threshold before any agent is involved.
 
     python -m scripts.search "how much is a root canal"
-    python -m scripts.search "do you take Delta Dental" --full
+    python -m scripts.search "do you take cigna" --full
     python -m scripts.search --calibrate
 """
 
@@ -17,20 +17,20 @@ import sys
 from app.config import settings
 from app.rag.retriever import RetrievalStatus, retrieve
 
-# Questions the clinic's documents genuinely answer, paired with questions
+# Questions the laboratory's documents genuinely answer, paired with questions
 # they do not. A good threshold separates these two groups cleanly.
 IN_SCOPE = [
-    "how much does a root canal cost",
-    "do you accept Delta Dental insurance",
-    "what are your opening hours on Saturday",
-    "my tooth was knocked out, what should I do",
-    "what happens if I cancel my appointment late",
-    "can I be treated while pregnant",
-    "who do I speak to about a billing problem",
-    "how long do fillings last",
-    "is there parking at the clinic",
-    "what should I avoid after an extraction",
-    "do you see nervous patients",
+    "how much is a full blood count",
+    "do you accept cigna",
+    "are you open on sunday",
+    "do I need to fast for a lipid profile",
+    "when will my report be ready",
+    "can you tell me what my result means",
+    "do you come to my house",
+    "how do I collect a urine sample",
+    "is there parking at the hawthorne branch",
+    "what should I do after the blood draw",
+    "I'm frightened of needles",
     "can I pay in instalments",
 ]
 

@@ -212,8 +212,8 @@ degrades politely when they are hit.
 ## Running the container locally
 
 ```bash
-docker build -t dental-assistant .
-docker run --rm -p 7860:7860 -e GROQ_API_KEY=gsk_... dental-assistant
+docker build -t lab-assistant .
+docker run --rm -p 7860:7860 -e GROQ_API_KEY=gsk_... lab-assistant
 ```
 
 Then open http://127.0.0.1:7860.

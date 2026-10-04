@@ -206,7 +206,7 @@ def test_creating_an_appointment_sends_an_explicit_timezone() -> None:
 
 
 def test_created_events_are_tagged_as_assistant_bookings() -> None:
-    """Clinic staff must be able to tell where a booking came from."""
+    """Laboratory staff must be able to tell where a booking came from."""
     calendar = make_calendar([])
 
     calendar.create_appointment(slot_at(14), summary="Cleaning", patient_name="A B")

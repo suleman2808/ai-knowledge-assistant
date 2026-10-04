@@ -26,37 +26,46 @@ from app.rag.retriever import retrieve
 
 # (question, a substring of the breadcrumb that should be retrieved)
 LABELLED: list[tuple[str, str]] = [
-    # Observed misses, kept as regression cases
-    ("do you take cigna", "Accepted Insurance Providers"),                    # step 7: brand name
-    ("what if I cancel late", "Cancellation Policy"),                         # step 2: "late" collision
-    ("what should I avoid after having a tooth out", "After an Extraction"),  # step 4
-    ("whats the cancellation fee if I cancel tomorrow", "Cancellation Policy"),
-    # Brand and proper-noun lookups
-    ("do you accept metlife", "Accepted Insurance Providers"),
-    ("is carecredit available", "Payment Plans"),
+    # Brand and proper-noun lookups: the weakness vector search has, and
+    # the reason BM25 was added.
+    ("do you take cigna", "Accepted Insurance Providers"),
     ("are you in network with aetna", "Accepted Insurance Providers"),
+    ("do you accept providence", "Accepted Insurance Providers"),
     ("do you take oregon health plan", "Accepted Insurance Providers"),
     ("tell me about dr reyes", "Samuel Reyes"),
     ("who is fiona", "Fiona Adeyemi"),
-    ("which bus goes to the clinic", "Parking and Transit"),
-    # Ordinary questions
-    ("how much is a root canal on a molar", "Restorative Treatment"),
-    ("what time do you close on friday", "Opening Hours"),
-    ("my tooth was knocked out", "First Aid"),
-    ("can I be treated while pregnant", "pregnant"),
-    ("do you see nervous patients", "nervous patients"),
-    ("is there parking", "Parking and Transit"),
-    ("how long do fillings last", "How long do fillings last"),
-    ("can I pay in instalments", "Payment Plans"),
-    ("what happens if I miss an appointment without telling you", "Cancellation Policy"),
+    ("where is the gresham branch", "Gresham"),
+    ("which bus goes to the hawthorne branch", "Parking and Transit"),
+    # Prices and turnaround — the commonest real questions
+    ("how much is a full blood count", "Haematology"),
+    ("what does a lipid profile cost", "Biochemistry"),
+    ("how much is the basic health check", "Panels"),
+    ("how much does hba1c cost", "Biochemistry"),
+    ("when will my urine culture be ready", "Microbiology"),
+    ("how long does a blood culture take", "Microbiology"),
+    # Preparation — where getting it wrong means a repeat sample
+    ("do I need to fast for a lipid profile", "Fasting"),
+    ("can I drink water while fasting", "Fasting"),
+    ("is black coffee allowed before a blood test", "Fasting"),
+    ("should I stop my medication before the test", "Medication"),
+    ("how do I collect a urine sample", "Before Specific Tests"),
+    ("what happens during a glucose tolerance test", "Before Specific Tests"),
+    ("why am I bruising after the blood draw", "After a Blood Draw"),
+    # Reports and results
+    ("can you tell me what my result means", "Cannot Interpret"),
+    ("can I get my report over the phone", "How You Receive It"),
+    ("my friend is collecting my report", "Collecting a Printed Report"),
+    ("what is a critical result", "Critical Results"),
+    ("my result is outside the reference range", "Reference Ranges"),
+    # Logistics and policy
+    # The FAQ answers this in full, which is a better hit than the
+    # price table it was first labelled against.
+    ("do you come to my house", "Do you come to my house"),
+    ("do I need an appointment", "Do I Need an Appointment"),
+    ("are you open on sunday", "Hawthorne"),
     ("how do I make a complaint", "Complaints"),
-    ("do you do teeth whitening", "Cosmetic Treatment"),
-    ("what age do you see children from", "Children"),
-    ("my gums bleed when I brush", "gums bleed"),
-    ("dry socket", "After an Extraction"),
-    ("how much is an implant", "Dentures and Implants"),
-    ("are you open on christmas eve", "Holiday Closures"),
-    ("can I have a chaperone", "Chaperones"),
+    ("will my employer see my results", "Privacy and Records"),
+    ("is hiv testing confidential", "HIV"),
 ]
 
 

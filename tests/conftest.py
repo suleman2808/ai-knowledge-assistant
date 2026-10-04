@@ -2,7 +2,7 @@
 
 Every test gets its own throwaway analytics database. Without this, any
 test that calls `graph.run()` would write into the real
-`data/analytics.db` and quietly skew the numbers a clinic owner sees.
+`data/analytics.db` and quietly skew the numbers a laboratory owner sees.
 """
 
 from __future__ import annotations

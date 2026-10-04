@@ -1,117 +1,129 @@
 # Patient Policies
 
-## Registering as a New Patient
+## Registration
 
-We are currently accepting new patients. Registration requires a completed
-medical history, photographic identification, and insurance details if you
-intend to claim.
+No registration is required to have a test. We take your name, date of
+birth and a contact number at the point of collection.
 
-We ask new patients to have their first examination within 60 days of
-registering. Records for patients who register but never attend are removed
-after twelve months.
+Date of birth matters more than it looks: reference ranges differ by age,
+and it is the second identifier used to make sure a sample is matched to
+the right person.
 
-## Transferring From Another Practice
+## Identification
 
-We request your records and X-rays from your previous practice with your
-written consent. This usually takes one to two weeks.
+We check photographic identification before collecting a sample and
+before releasing a printed report.
 
-You do not need to wait for records to arrive before being seen. Recent
-X-rays from elsewhere are accepted if they are under 12 months old and of
-diagnostic quality, which spares you both the cost and the exposure.
+This is not bureaucracy. A sample labelled with the wrong name produces a
+result filed against the wrong person, and that is the error with the
+worst consequences a laboratory can make.
 
-## Medical History
-
-We ask you to review your medical history at every examination. This is not
-a formality. Blood thinners, bisphosphonates, immunosuppressants, diabetes,
-pregnancy and recent heart surgery all change how treatment is safely
-carried out.
-
-Tell us about any change in medication, any hospital admission, and any
-pregnancy, even if it seems unrelated to your teeth.
+If you have no photographic identification, tell reception. We can
+proceed with other verification rather than turn you away.
 
 ## Privacy and Records
 
-Patient records are held securely and retained for seven years after your
-last visit, or until a patient who was a minor reaches 25, whichever is
-later.
+Records are held securely and kept for seven years after your last test,
+or until a patient who was a minor reaches 25, whichever is later.
 
-We do not share your information with anyone outside the practice without
-your consent, other than where required by law or to process an insurance
-claim you have asked us to submit.
+We do not share your information with anyone outside the laboratory
+except:
 
-You may request a copy of your records at any time. We provide them within
-30 days at no charge. Requests go to the practice manager.
+- The doctor named on the request form
+- Your insurer, where you have asked us to bill them
+- Where required by law, including notifiable infectious diseases
+
+**Family members are not an exception.** We will not confirm that a
+relative had a test, let alone its result, without their written consent.
+This applies to spouses and to parents of adult children.
+
+**Employers are not an exception either.** Where an employer pays for a
+pre-employment screen, they receive a fit/unfit statement, not your
+results, unless you have specifically consented otherwise in writing.
+
+## HIV and Sexual Health Testing
+
+Results are released to the person tested and to nobody else, whoever
+paid.
+
+Testing is available without a doctor's request. Where a result is
+positive, our pathologist telephones you personally, arranges a
+confirmatory test at no charge, and refers you to a specialist service
+the same day.
+
+## Access to Your Records
+
+Request a copy of your records at any time, free of charge, provided
+within 30 days. Requests go to the practice manager.
+
+Past reports are available immediately in the patient portal for the
+retention period.
 
 ## Complaints
 
 We would rather hear a complaint than lose a patient quietly.
 
-**How to complain.** Speak to any member of staff, or contact the practice
-manager, Fiona Adeyemi, on (503) 555-0142 or
-fiona@riverbenddental.example. You may complain in person, by telephone, by
-email or in writing.
+**How.** Speak to any member of staff, or contact the practice manager,
+Fiona Adeyemi, on (503) 555-0142 or
+fiona@riverbenddiagnostics.example. In person, by telephone, by email or
+in writing.
 
-**What happens next.** We acknowledge every complaint within two working
-days. We aim to give a full response within ten working days, and if the
-matter is complex and needs longer we will tell you why and give a revised
-date.
+**What happens.** Acknowledged within two working days. A full response
+within ten working days, and if it needs longer we tell you why and give
+a date.
 
-Complaints about clinical treatment are reviewed by the treating dentist
-and by Dr Okafor. You may request that the treating dentist is not involved
-in reviewing your complaint, and we will honour that.
+Complaints about a result or a clinical decision are reviewed by a
+pathologist who was not involved in the original report. You may ask that
+the pathologist who authorised it is not the one reviewing it, and we
+will honour that.
 
 **If you remain dissatisfied.** You may refer the matter to the Oregon
-Board of Dentistry, 1500 SW 1st Avenue, Suite 770, Portland OR 97201, or
-to your insurer if the complaint concerns billing.
+Health Authority, or to your insurer where it concerns billing.
 
-Complaining does not affect your treatment or your standing as a patient in
-any way. We ask staff to record complaints even when they are resolved on
-the spot, because patterns matter more than individual incidents.
+Complaining does not affect your care or your standing as a patient. We
+record complaints even when resolved on the spot, because patterns matter
+more than incidents.
 
-## Refunds
+## Sample Rejection
 
-Where treatment has failed within a reasonable period and through no fault
-of the patient, we will remake or refund it.
+We reject a sample rather than report an unreliable result. Common
+reasons: a clotted sample in a tube that must not clot, an insufficient
+volume, a haemolysed sample, a mislabelled or unlabelled container, or a
+sample that arrived outside its stability window.
 
-**Guarantee periods:**
-
-| Treatment | Period |
-| --- | --- |
-| Composite fillings | 2 years |
-| Crowns, bridges, veneers | 5 years |
-| Dentures | 1 year for fit adjustments |
-| Implants | 5 years on the fixture |
-| Root canal treatment | 2 years |
-
-Guarantees require that you attend recommended check-ups and hygiene
-visits. They do not cover damage from accidents, grinding where a
-recommended night guard was declined, or neglect.
-
-Whitening is not guaranteed, because results depend on factors outside our
-control.
+You will be told the reason, and re-collection is free where the fault
+was ours or the sample's, not yours.
 
 ## Standard of Behaviour
 
 Our staff are entitled to work without abuse. We will end an appointment
-and, in serious cases, remove a patient from our register following
-aggressive, threatening, discriminatory or sexually inappropriate behaviour
-toward any member of staff or any other patient.
+and, in serious cases, decline further non-urgent service following
+aggressive, threatening, discriminatory or sexually inappropriate
+behaviour.
 
-This has happened three times in fourteen years. We mention it only so the
-policy is on record.
+Phlebotomists are particularly exposed to this, and we take it seriously
+on their behalf.
 
 ## Interpreters and Communication Needs
 
-We arrange a telephone interpreter at no charge with 48 hours' notice, in
-any language. British and American Sign Language interpreters need one
-week's notice.
+A telephone interpreter is arranged free with 48 hours' notice, in any
+language. Sign language interpreters need one week.
 
-If you would prefer written information in large print, or need extra time
-to discuss treatment, tell reception. We can also send treatment plans in
-advance so you can read them without pressure.
+Preparation instructions are available in large print, and we will go
+through them verbally if that is easier. Fasting instructions in
+particular are worth getting right the first time.
 
 ## Chaperones
 
-Any patient may request that a second member of staff is present during
-treatment, for any reason and without explanation. Ask at reception or tell
-the dentist. There is no charge and no record is made of the reason.
+Any patient may ask for a second member of staff to be present during
+collection, for any reason and with no explanation. No charge, and no
+record is kept of the reason.
+
+## Research and Data
+
+Samples are not used for research. Anonymised, aggregated data —
+turnaround times, test volumes, quality metrics — is used internally to
+run the laboratory and in external quality assessment schemes, where it
+carries no patient identifiers.
+
+We do not sell data to anyone, in any form.

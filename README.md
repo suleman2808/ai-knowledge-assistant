@@ -18,27 +18,32 @@ license: mit
 [![licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 [![demo](https://img.shields.io/badge/demo-streamlit-0f5c63)](https://ai-knowledge-assistant-original.streamlit.app/)
 
-Ask it something the clinic's documents cover ("how much is a root canal
-on a molar?"), and something they do not ("do you offer botox?"). It
-answers the first with a citation and declines the second — that
-difference is the whole point of the project.
+Ask it something the laboratory's documents cover ("do I need to fast for
+a lipid profile?"), and something they do not ("do you do allergy
+testing?"). It answers the first with a citation and declines the second.
+
+Then ask it to interpret a result — "my haemoglobin is 9.2, is that
+bad?" — and watch it refuse that too, because the laboratory's own
+policy says staff do not interpret results. That is the difference
+between a chatbot and something a healthcare business could put in front
+of patients.
 
 A customer-facing assistant for a service business, built around one
 constraint: **it must not make things up about the business.** The demo
-domain is a dental clinic.
+domain is a medical diagnostic laboratory.
 
 An incoming message is classified by a router and dispatched to one of
 three specialist agents:
 
 | Agent | Responsibility |
 | --- | --- |
-| **Inquiry** | Answers questions about services, hours, pricing and policies using RAG over the clinic's own documents. Never answers from model knowledge, and refuses when the documents do not cover the question. |
+| **Inquiry** | Answers questions about services, hours, pricing and policies using RAG over the laboratory's own documents. Never answers from model knowledge, and refuses when the documents do not cover the question. |
 | **Booking** | Checks availability and creates real appointments in Google Calendar. |
 | **Complaint** | Rates severity, logs the complaint, and escalates the serious ones by rule rather than by model judgement. |
 
 Every turn is recorded, and the analytics dashboard reports what patients
 asked, how often the assistant could answer, and which questions it could
-not — the gaps in the clinic's own documentation.
+not — the gaps in the laboratory's own documentation.
 
 ```
                       ┌─────────┐
@@ -117,19 +122,20 @@ Every layer can be exercised on its own, without the ones above it.
 ```bash
 # Knowledge base
 python -m scripts.inspect_chunks --show 2      # chunking, without embedding
-python -m scripts.search "how much is a root canal"
+python -m scripts.search "how much is a full blood count"
 python -m scripts.search --calibrate           # relevance threshold evidence
 python -m scripts.eval_retrieval --compare     # vector vs hybrid, measured
 
 # Agents, individually
 python -m scripts.try_agent inquiry --suite
-python -m scripts.try_agent booking "book a cleaning next Tuesday at 2pm"
+python -m scripts.try_agent booking "book a blood test next Tuesday at 8am"
 python -m scripts.try_agent complaint "I was charged twice"
 
 # The assembled graph
 python -m scripts.chat                         # interactive, keeps history
 python -m scripts.chat --routing               # routing accuracy probe
 python -m scripts.chat --scenario booking      # scripted multi-turn booking
+python -m scripts.chat --scenario results      # report timing, then a refusal
 
 # Analytics
 python -m scripts.seed_demo --reset            # realistic traffic, real graph
@@ -155,10 +161,10 @@ app/
   rag/               Chunking, embeddings, BM25, vector store, retrieval
   integrations/      Calendar, analytics
 streamlit_app.py     Alternative front-end, for free hosting
-data/documents/      The clinic's documents — the knowledge base
+data/documents/      The laboratory's documents — the knowledge base
 ui/                  Chat page and dashboard
 scripts/             CLI entry points
-tests/               174 tests
+tests/               282 tests
 ```
 
 ## Optional: Google Calendar
@@ -180,8 +186,8 @@ python -m scripts.google_auth --revoke # back to the in-memory calendar
 ## Deployment
 
 ```bash
-docker build -t dental-assistant .
-docker run --rm -p 7860:7860 -e GROQ_API_KEY=gsk_... dental-assistant
+docker build -t lab-assistant .
+docker run --rm -p 7860:7860 -e GROQ_API_KEY=gsk_... lab-assistant
 ```
 
 The image builds the vector store at build time, so the container starts
@@ -219,7 +225,7 @@ python -m scripts.ingest
 ## Tests
 
 ```bash
-python -m pytest tests/ -q      # 174 tests, ~13s
+python -m pytest tests/ -q      # 282 tests, ~22s
 ```
 
 Every LLM call, vector store and calendar is stubbed, so the suite needs
@@ -262,16 +268,17 @@ answer against six they do not. The groups *overlap*:
 
 | Query | Score | In scope? |
 | --- | --- | --- |
-| "how long do fillings last" | 0.835 | yes |
-| "what are your opening hours on Saturday" | 0.726 | yes |
-| **"what time does the cinema open"** | **0.422** | **no** |
-| "who do I speak to about a billing problem" | 0.384 | yes |
-| "is there parking at the clinic" | 0.380 | yes |
-| "what is the capital of France" | 0.051 | no |
+| "I'm frightened of needles" | 0.695 | yes |
+| "do I need to fast for a lipid profile" | 0.647 | yes |
+| **"can you help me renew my car insurance"** | **0.357** | **no** |
+| **"what time does the cinema open"** | **0.347** | **no** |
+| "do you accept cigna" | 0.263 | yes |
+| "what is the capital of France" | 0.087 | no |
 
-No single threshold separates them: the cinema question outscores two
-legitimate ones and retrieves the clinic's opening-hours table, which a
-naive agent would answer from. So:
+No single threshold separates them. A legitimate question about an
+insurer scores *below* two questions about car insurance and cinema
+times, and the cinema question retrieves the laboratory's opening hours —
+which a naive agent would answer from. So:
 
 1. The similarity threshold (0.30) rejects the obviously unrelated.
 2. The Inquiry Agent's prompt requires that the retrieved context answers
@@ -285,11 +292,11 @@ first, and the model refused anyway, because "tomorrow" does not say how
 many hours' notice that is. The grounding rule now distinguishes a
 question the material cannot answer from one whose answer depends on a
 detail the patient omitted — the latter gets the rule for each case.
-Refusing there withholds an answer the clinic has written down, which is
+Refusing there withholds an answer the laboratory has written down, which is
 the opposite of what the rule is for.
 
 **Every answer shows its provenance.** The UI badges each reply as
-*From clinic documents* or *Not in our documents*, with the cited
+*From laboratory documents* or *Not in our documents*, with the cited
 sections expandable underneath. Grounding is the promise this project
 makes, so it is visible to the patient rather than buried in a developer
 console.
@@ -325,11 +332,11 @@ Size-based splitting is the fallback, not the strategy, and it splits on
 paragraph then sentence boundaries with a 150-character overlap.
 
 **Hybrid search: vector plus BM25.** Vector search matches by meaning,
-which is its strength and its blind spot. "my tooth got knocked out"
-finds a section titled "First Aid" with no shared words; "do you take
-cigna" scored 0.23 against the page that literally lists *Cigna Dental
-PPO*, because an embedding model gives a brand name little semantic
-weight. BM25 is the complement — it scores exact term overlap and weights
+which is its strength and its blind spot. "what should I do after the
+blood draw" finds a section titled "After a Blood Draw" easily; "do you
+take cigna" scored 0.26 and retrieved *Payment Methods* rather than the
+page that literally lists *Cigna Healthcare PPO*, because an embedding
+model gives a brand name little semantic weight. BM25 is the complement — it scores exact term overlap and weights
 rare terms heavily. The two rankings are combined by Reciprocal Rank
 Fusion, which works on ranks rather than raw scores, because cosine
 similarity and BM25 scores live on unrelated scales and cannot
@@ -337,14 +344,16 @@ meaningfully be added. BM25 is implemented directly rather than pulled in
 as a dependency, because the algorithm is short and worth being able to
 read.
 
-Measured on 28 labelled questions (`scripts/eval_retrieval.py`):
+Measured on 32 labelled questions (`scripts/eval_retrieval.py`):
 
 | | vector only | hybrid |
 | --- | --- | --- |
-| hit@1 | 68% | 79% |
-| hit@k | 79% | 93% |
-| MRR | 0.720 | 0.848 |
-| out-of-scope admitted | 3/8 | 3/8 |
+| hit@1 | 50% | 66% |
+| hit@k | 81% | 94% |
+| MRR | 0.643 | 0.789 |
+
+Every insurer-name question — cigna, aetna, providence — fails on vector
+search alone and succeeds with BM25 alongside it.
 
 **How a keyword hit earns the right to bypass the threshold.** Three
 conditions: top-two BM25 rank, a matched term appearing in at most three
@@ -368,9 +377,9 @@ document get maximal IDF, which is exactly what correctly sinks
 coverage. It fails safe — back to vector search, at worst a refusal,
 never a false answer.
 
-**Follow-up questions are rewritten before retrieval.** "Is that for one
-surface?" retrieves nothing useful, because the word carrying the meaning
-— "filling" — is in the previous turn. The Inquiry Agent rewrites
+**Follow-up questions are rewritten before retrieval.** "Do I need to
+fast for it?" retrieves nothing useful, because the word carrying the
+meaning — "lipid profile" — is in the previous turn. The Inquiry Agent rewrites
 follow-ups into standalone questions using the small model, only when
 history exists, so a first message costs no extra call. It falls back to
 the original query on any failure, and rejects a rewrite that is
@@ -420,7 +429,7 @@ both failures were real: one prompt bug, one wrong label of mine.
 furious, anyway can I book a cleaning Tuesday" routes to `complaint` with
 `booking` recorded as secondary. The rule is asymmetric cost — a booking
 the patient did not get, they ask for again; a complaint never recorded
-is gone, and the clinic never learns of it. The first version let the
+is gone, and the laboratory never learns of it. The first version let the
 model weigh them and it chose booking.
 
 **The secondary-intent note offers, it does not assert.** The reply says
@@ -431,7 +440,7 @@ wording.
 
 **A fourth intent, `other`, exists because real chat boxes receive
 "hi".** Routing a greeting to the RAG agent produces "I don't have that
-in the clinic's information" — technically true, terrible first
+in the laboratory's information" — technically true, terrible first
 impression. `other` covers two different cases and answers them
 differently: a pleasantry gets a greeting, while a genuinely out-of-scope
 question is told plainly that it is out of scope.
@@ -449,7 +458,7 @@ agent, so each is testable alone, and the graph was wired up later
 without changing a line of agent code.
 
 **Prompts are markdown files, not string literals.** The person who
-should approve what a clinic says to patients does not read Python.
+should approve what a laboratory says to patients does not read Python.
 Editing a prompt produces a readable diff, and tuning becomes a content
 change rather than a code change. Placeholders use `{{name}}` because
 prompts contain literal JSON braces that `str.format` would choke on.
@@ -492,7 +501,7 @@ forget.
 ## Calendar
 
 **Timezones are converted at exactly one boundary.** The rest of the
-project uses naive datetimes meaning clinic wall-clock time, which is the
+project uses naive datetimes meaning laboratory wall-clock time, which is the
 right model for a business whose hours are "Monday 8am to 5pm" regardless
 of where the patient is sitting. Google works in absolute time.
 `app/integrations/google_calendar.py` is the only module that converts,
@@ -572,7 +581,7 @@ project does not need.
 **Progress is streamed, because tokens cannot be.** The agents' model
 calls are not streamed, so there is nothing token-by-token to send. What
 the graph can report is which node is running — "working out what you
-need", then "searching the clinic's documents". A five-second wait with
+need", then "searching the laboratory's documents". A five-second wait with
 visible progress reads as work; the same wait with a blank screen reads
 as broken. Server-sent events carry those stages, then the finished
 answer. Once a stream has started the status code is already 200, so a
@@ -655,21 +664,18 @@ oversight.
 
 - The IDF coverage cut-off (0.575) is fitted on 14 examples. Calibrated,
   not proven; it should be re-derived on real traffic.
-- Two known misses remain: "what should I avoid after having a tooth
-  out" never uses the word *extraction*, a vocabulary gap neither method
-  bridges; and "which bus goes to the clinic" was a hybrid win given up
-  when the coverage rule tightened.
-- **Query expansion was tried for the first of those and removed.** A
-  curated map of patient phrasing to clinical terms ("tooth out" →
-  "extraction") fed into the keyword search changed the evaluation by
-  nothing at all: identical hit@1, hit@k and MRR. The reason is
-  instructive. `extraction` has an IDF of only 2.45 in this corpus —
-  it appears in several chunks, so it is not the distinctive term it
-  looks like — while the generic words in the query (`after`, `tooth`,
-  `out`, `avoid`) match every aftercare section equally. The right chunk
-  is also long, so BM25's length normalisation pushes it further down.
-  It never reached the top five. The map was deleted rather than kept
-  for the look of it.
+- One known miss remains: "what does a lipid profile cost" returns the
+  *Panels* table rather than *Biochemistry*. Both mention the test; the
+  one with the price is longer, and BM25 penalises length.
+- **Query expansion was tried on an earlier version of this corpus and
+  removed.** A curated map of patient phrasing to clinical terms, fed
+  into the keyword search, changed the evaluation by nothing at all:
+  identical hit@1, hit@k and MRR. The reason generalises. The term that
+  looks distinctive usually is not — it appears across several chunks,
+  so its IDF is middling — while the generic words in the question match
+  every comparable section equally, and the chunk that actually holds the
+  answer is often the longest, which BM25 penalises. The map was deleted
+  rather than kept for the look of it.
 - No cross-encoder reranker. It is the standard next improvement and,
   unlike expansion, it would address the actual cause: these misses need
   a model that reads query and chunk *together*, not a better bag of
@@ -685,7 +691,7 @@ oversight.
 
 # A note on the demo data
 
-The clinic, its staff, prices and policies are fictional. The documents
+The laboratory, its staff, prices and policies are fictional. The documents
 in `data/documents/` were written to be realistic enough that chunking
 and retrieval face real problems — pricing tables, nested policy
 sections, clinical instructions, an FAQ — rather than to describe any

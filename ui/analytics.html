@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Assistant activity — Riverbend Dental Care</title>
+<title>Assistant activity — Riverbend Diagnostics</title>
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -70,7 +70,7 @@ function render(d) {
     parts.push(`<div class="panel">
       <h2>Knowledge gaps</h2>
       <p class="note">Questions the assistant declined &mdash; things patients want to know
-      that the clinic&rsquo;s documents do not cover. Each one is a page worth writing.</p>
+      that the laboratory&rsquo;s documents do not cover. Each one is a page worth writing.</p>
       ${d.knowledge_gaps.map((g) => `<div class="gap">
         <span>${escape(g.question)}</span>
         <span class="times">${g.times > 1 ? `asked ${g.times}×` : 'asked once'}</span>

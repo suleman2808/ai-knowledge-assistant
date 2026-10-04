@@ -41,11 +41,13 @@ Rules:
   "the 14th", "a week on Friday". Null if they named no day.
 - Do not infer a specific time from a vague one. "Morning" sets
   `time_preference`, not `time`.
-- `service` is what the patient asked for in their own words, lightly
-  normalised: "a clean" becomes "cleaning", "my teeth checked" becomes
-  "check-up".
-- Put anything clinically relevant but not a field — pain, anxiety, a
-  preferred dentist — into `notes`.
+- `service` is the test or panel asked for, in the patient's own words,
+  lightly normalised: "sugar test" becomes "fasting blood glucose",
+  "thyroid" becomes "thyroid profile", "full blood" becomes "full blood
+  count". Do not invent a test that was not mentioned.
+- Put anything relevant but not a field — fear of needles, a difficult
+  previous draw, a doctor's request form, a home collection address —
+  into `notes`.
 - If the message mentions no appointment at all, return every field as
   null.
 - Take details from the conversation history as well as the latest

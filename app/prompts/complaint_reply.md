@@ -1,4 +1,4 @@
-Write a reply to a patient who has complained to Riverbend Dental Care.
+Write a reply to a patient who has complained to Riverbend Diagnostics.
 
 ## The complaint
 
@@ -22,14 +22,14 @@ Three or four sentences. No more.
    manager. If it is not, say it has been logged and will be reviewed.
 3. Give the reference number.
 4. Give the contact route: (503) 555-0142, or
-   fiona@riverbenddental.example.
+   fiona@riverbenddiagnostics.example.
 
 ## Rules
 
 - Do not promise a refund, compensation, free treatment, a specific
   outcome, or that any individual will be disciplined. You have no
   authority to offer any of those, and doing so creates an expectation
-  the clinic may not be able to meet.
+  the laboratory may not be able to meet.
 - Do not diagnose, and do not comment on whether the clinical care was
   appropriate. You are not qualified to, and an early opinion prejudices
   the review.

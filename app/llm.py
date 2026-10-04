@@ -45,7 +45,7 @@ class LLMError(RuntimeError):
         super().__init__(message)
         self.user_message = user_message or (
             "I'm having trouble reaching my language service right now. "
-            "Please try again in a moment, or call the clinic directly."
+            "Please try again in a moment, or call the laboratory directly."
         )
 
 

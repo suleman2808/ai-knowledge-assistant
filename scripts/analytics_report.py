@@ -45,7 +45,7 @@ def main() -> int:
         return 0
 
     total = data["turns"]
-    print(f"Riverbend Dental Care — assistant activity, last {data['window_days']} days")
+    print(f"Riverbend Diagnostics — assistant activity, last {data['window_days']} days")
     print("=" * 66)
 
     if not total:
@@ -61,7 +61,7 @@ def main() -> int:
 
     inq = data["inquiries"]
     print("\nQuestions")
-    print(f"  answered from clinic documents : {inq['answered']} of {inq['total']}"
+    print(f"  answered from laboratory documents : {inq['answered']} of {inq['total']}"
           f"  ({inq['answer_rate_pct'] or 0}%)")
     print(f"  declined (no answer on file)   : {inq['declined']}")
 

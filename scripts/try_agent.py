@@ -18,30 +18,30 @@ import sys
 
 INQUIRY_SUITE = [
     # Should answer, grounded.
-    "how much is a root canal on a molar",
-    "do you accept Delta Dental",
-    "what time do you close on Friday",
-    "what should I avoid after having a tooth out",
-    "is there parking",
+    "how much is a full blood count",
+    "do you accept cigna",
+    "do I need to fast for a lipid profile",
+    "when will my urine culture be ready",
+    "do you come to my house",
     # Should refuse: related material exists, but does not answer this.
     "what time does the cinema open",
-    "how much does a hip replacement cost",
-    "what is your practice's annual revenue",
+    "how much does an MRI cost",
+    "what is your laboratory's annual revenue",
     "who is the current president",
-    # Should refuse or redirect: outside what the clinic does.
-    "can you write me a prescription for antibiotics",
+    # The refusal that matters most in this domain.
+    "my haemoglobin is 9.2, is that bad?",
 ]
 
 BOOKING_SUITE = [
-    "can I book a cleaning next Tuesday at 2pm, my name is Sarah Chen, 503-555-0180",
+    "can I book a full blood count next Tuesday at 8am, my name is Sarah Chen, 503-555-0180",
     "I need an appointment",
-    "book me in for a check-up tomorrow morning",
+    "book me in for a glucose tolerance test tomorrow morning",
 ]
 
 COMPLAINT_SUITE = [
     "I waited 45 minutes past my appointment time and nobody apologised",
-    "I was charged twice for the same filling and three phone calls have gone unanswered",
-    "The hygienist was rough and my gums bled for two days. This is unacceptable.",
+    "I was charged twice for the same panel and three phone calls have gone unanswered",
+    "The phlebotomist tried four times and my arm is badly bruised. This is unacceptable.",
     "Your receptionist was lovely, just wanted to say thanks",
 ]
 

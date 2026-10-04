@@ -6,7 +6,7 @@ the Booking Agent is unchanged by which one is in use.
 ## Time zones
 
 The rest of the project uses naive datetimes and treats them as the
-clinic's wall-clock time, which is the right model for a business whose
+laboratory's wall-clock time, which is the right model for a business whose
 opening hours are "Monday 8am to 5pm" regardless of where a patient is
 sitting. Google works in absolute time and requires RFC 3339.
 
@@ -46,13 +46,13 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 
 # Event colour in Google Calendar. 9 is a blue-violet that stands out
-# from manually created entries, so clinic staff can see at a glance
+# from manually created entries, so laboratory staff can see at a glance
 # which bookings came from the assistant.
 ASSISTANT_COLOUR_ID = "9"
 
 
 def clinic_tz() -> ZoneInfo:
-    """Return the clinic's timezone, with a clear error if unavailable."""
+    """Return the laboratory's timezone, with a clear error if unavailable."""
     try:
         return ZoneInfo(settings.clinic_timezone)
     except Exception as exc:
@@ -63,12 +63,12 @@ def clinic_tz() -> ZoneInfo:
 
 
 def to_rfc3339(naive_local: datetime) -> str:
-    """Convert a clinic wall-clock time to an absolute RFC 3339 string."""
+    """Convert a laboratory wall-clock time to an absolute RFC 3339 string."""
     return naive_local.replace(tzinfo=clinic_tz()).isoformat()
 
 
 def from_rfc3339(value: str) -> datetime:
-    """Convert an absolute time from Google back to clinic wall-clock.
+    """Convert an absolute time from Google back to laboratory wall-clock.
 
     Google returns all-day events as a bare date, which has no time at
     all; those are treated as starting at midnight local.
@@ -182,7 +182,7 @@ class GoogleCalendar:
     # -- Protocol ---------------------------------------------------------
 
     def busy_periods(self, day: date) -> list[TimeSlot]:
-        """Return existing events on `day`, in clinic wall-clock time.
+        """Return existing events on `day`, in laboratory wall-clock time.
 
         Raises:
             CalendarError: The API call failed.
@@ -296,7 +296,7 @@ class GoogleCalendar:
             },
         }
 
-        # Adding the clinic as an attendee is what makes Google send a
+        # Adding the laboratory as an attendee is what makes Google send a
         # confirmation email, immediately, with the appointment attached.
         # There is no "send an email" call in the Calendar API — this is
         # the mechanism.

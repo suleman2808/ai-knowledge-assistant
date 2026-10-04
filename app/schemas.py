@@ -26,7 +26,7 @@ class ChatRequest(BaseModel):
         min_length=1,
         max_length=MAX_MESSAGE_CHARS,
         description="The patient's message.",
-        examples=["How much is a root canal on a molar?"],
+        examples=["How much is a full blood count, and do I need to fast?"],
     )
     session_id: str = Field(
         default="",
@@ -57,7 +57,7 @@ class ChatRequest(BaseModel):
 
 
 class Source(BaseModel):
-    """A cited section of a clinic document."""
+    """A cited section of a laboratory document."""
 
     breadcrumb: str = Field(description="Heading path, e.g. 'Insurance > Payment Plans'.")
     source: str = Field(description="Filename the text came from.")

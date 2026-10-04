@@ -97,12 +97,12 @@ class AgentResponse:
 FALLBACK_MESSAGES = {
     "llm_unavailable": (
         "I'm having trouble reaching my language service at the moment, so I "
-        "can't answer reliably. Please try again shortly, or call the clinic "
+        "can't answer reliably. Please try again shortly, or call the laboratory "
         "on (503) 555-0142 and someone will help you straight away."
     ),
     "unexpected": (
         "Something went wrong at my end and I'd rather not guess. Please call "
-        "the clinic on (503) 555-0142 and the team will sort this out for you."
+        "the laboratory on (503) 555-0142 and the team will sort this out for you."
     ),
 }
 

@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_NAME = "booking"
 
-# How far ahead a booking may be made. Beyond this the clinic's diary is
+# How far ahead a booking may be made. Beyond this the laboratory's diary is
 # not considered reliable.
 MAX_DAYS_AHEAD = 120
 
@@ -234,7 +234,7 @@ def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> Ag
     """Confirm a booking that has actually been written to the calendar.
 
     The wording depends on where it was written. Against a real calendar
-    the clinic's reminder policy applies. Against the in-memory
+    the laboratory's reminder policy applies. Against the in-memory
     fallback — which is what any deployed instance uses, because the
     OAuth token is deliberately not committed — the booking exists only
     in that process, and saying otherwise would be a lie the patient
@@ -247,12 +247,12 @@ def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> Ag
     if backend_name == "in_memory":
         closing = (
             "This is a demonstration, so the appointment is held in memory "
-            "rather than written to the clinic's diary, and no reminder is "
+            "rather than written to the laboratory's diary, and no reminder is "
             "sent. Against a connected calendar it would be a real booking."
         )
     elif appointment.notified:
         closing = (
-            "A confirmation has been emailed to the clinic. We'll send a "
+            "A confirmation has been emailed to the laboratory. We'll send a "
             "reminder three days before, and again on the morning. If you "
             "need to change it, we ask for 48 hours' notice."
         )

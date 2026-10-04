@@ -2,92 +2,103 @@
 
 ## Accepted Insurance Providers
 
-We are in-network with the following plans:
+We are in-network with:
 
-- Delta Dental Premier and PPO
-- Cigna Dental PPO
-- MetLife PDP Plus
-- Guardian DentalGuard Preferred
 - Regence BlueCross BlueShield of Oregon
-- Aetna Dental PPO
-- Moda Health Delta Dental of Oregon
+- Cigna Healthcare PPO
+- Aetna Choice POS II
+- UnitedHealthcare Choice Plus
+- Moda Health
+- PacificSource Health Plans
+- Providence Health Plan
+- First Choice Health Network
 
-We are **out-of-network** with Kaiser Permanente Dental, Humana, and all
-dental discount plans. We can still treat you under these plans, but you
-pay our self-pay rate and claim reimbursement yourself. We provide an
-itemised receipt with procedure codes for this purpose.
+We are **out-of-network** with Kaiser Permanente, Humana, and all health
+discount schemes. We can still test you under those plans, but you pay
+our self-pay price and claim reimbursement yourself. We provide an
+itemised receipt with CPT codes for that purpose.
 
-We do not accept the Oregon Health Plan (OHP) or Medicaid. Patients seeking
-OHP-covered care are referred to Multnomah County Dental Clinics, and we
-are happy to make that referral by phone.
+We do not accept the Oregon Health Plan or Medicaid. Patients covered by
+OHP are referred to Multnomah County Health Department laboratories, and
+we will make that referral by telephone.
 
-## How Benefits Are Applied
+## How Billing Works
 
-If you are in-network, we bill your insurer directly. You pay only your
-deductible, copay and any amount above your annual maximum on the day of
-treatment.
+In-network, we bill your insurer directly. You pay your deductible,
+copay, and anything above your annual maximum on the day.
 
-Most plans carry an annual maximum between $1,000 and $2,000, and it resets
-on 1 January for the majority of plans. Benefits do not roll over. If you
-have unused benefit late in the year and treatment is already planned, it
-is usually worth scheduling before the reset.
-
-Common coverage levels, though yours may differ:
+Typical coverage, though your plan may differ:
 
 | Category | Typical coverage |
 | --- | --- |
-| Preventive (exams, cleanings, X-rays) | 100% |
-| Basic (fillings, simple extractions) | 70–80% |
-| Major (crowns, root canals, dentures) | 50% |
-| Orthodontics | 50% up to a separate lifetime maximum |
-| Cosmetic (whitening, veneers) | Not covered |
+| Tests requested by a doctor as medically necessary | 80–100% |
+| Routine screening panels | 50–80% |
+| Tests you order yourself without a doctor | Usually not covered |
+| Pre-employment and insurance medicals | Not covered |
+| Home collection fee | Not covered |
+
+**A test you order yourself is rarely covered.** Insurers pay for
+investigation of a problem, not for curiosity. If coverage matters to
+you, see a doctor first and bring their request form.
 
 ## Verification of Benefits
 
-We verify your benefits before your first visit if you give us your plan
-details at least two working days beforehand. Bring your insurance card to
-the appointment.
+Give us your plan details two working days before your visit and we will
+verify what is covered. Bring your insurance card.
 
 An insurer's quotation of benefits is not a guarantee of payment. If a
-claim is denied after treatment, the balance becomes your responsibility.
-We will appeal a denial on your behalf once at no charge, and appeals
-succeed more often than patients expect.
+claim is denied afterwards, the balance is yours. We appeal a denial once
+at no charge, and appeals succeed more often than people expect —
+usually by attaching the diagnosis code the doctor intended.
 
 ## Payment Methods
 
-We accept cash, all major debit and credit cards, HSA and FSA cards, and
-bank transfer. We do not accept personal cheques.
+Cash, all major debit and credit cards, HSA and FSA cards, and bank
+transfer. We do not accept personal cheques.
 
-Payment for treatment is due on the day. For treatment plans over $500, we
-ask for a 30% deposit at the time of booking, with the balance due at the
-final visit.
+Payment is due on the day of collection. For orders above $400 we can
+split the amount over three interest-free instalments, arranged at the
+branch with no credit check.
 
-## Payment Plans
+## Corporate Accounts
 
-Treatment over $800 may be split into interest-free instalments over three
-to six months, arranged directly with us and requiring no credit check. A
-signed agreement is completed at the practice.
+Employers running staff health checks can be invoiced monthly in arrears
+on 30-day terms, subject to a signed agreement. Contact the practice
+manager on (503) 555-0142.
 
-For larger treatment we also accept CareCredit, which offers longer terms.
-CareCredit is a third-party lender; interest applies outside their
-promotional period and the agreement is between you and them, not us.
+## Price Transparency
 
-If you are struggling to pay an outstanding balance, contact our practice
-manager before the account becomes overdue. We would far rather arrange a
-realistic schedule than send an account to collections, and we have never
-refused a patient who approached us early.
+Every price in the Test Catalogue is what you pay as a self-paying
+patient. There are no handling fees, no separate phlebotomy charge, and
+no charge for the report in any format except post.
 
-## Missed Payment and Collections
+If a doctor's request includes a test we think is being duplicated — the
+same test done elsewhere within a week — we will tell you before taking
+the sample rather than afterwards on the bill.
 
-Balances unpaid after 60 days receive a written reminder. After 90 days,
-accounts may be referred to a collections agency, and non-urgent
-appointments are suspended until the balance is settled.
+## Refunds
 
-Urgent and emergency care is never withheld over an outstanding balance.
+If a sample is unusable through our error, we re-collect at no charge. If
+you choose not to return, the test is refunded in full.
 
-## Estimates and Pre-Authorisation
+If a test cannot be performed for a reason outside our control — an
+insufficient sample from a difficult draw, a sample clotted in transit —
+we re-collect once at no charge.
 
-For treatment over $1,000 we submit a pre-authorisation to your insurer and
-wait for their written response before proceeding, unless the treatment is
-urgent. This typically takes 10 to 15 working days and tells you your exact
-out-of-pocket cost in advance.
+Tests already performed are not refundable on the basis that you did not
+like the result. The result is the service.
+
+## Unpaid Balances
+
+Balances unpaid after 60 days receive a written reminder. After 90 days
+the account may be referred to a collections agency and further non-urgent
+testing is suspended until it is settled.
+
+Urgent testing requested by a doctor is never withheld over a balance.
+
+## Financial Hardship
+
+If you cannot pay, speak to the practice manager before the visit, not
+after. We hold a small hardship allocation for patients whose doctor has
+requested tests they cannot afford, and it is easier to apply before a
+bill exists than to unwind one afterwards.

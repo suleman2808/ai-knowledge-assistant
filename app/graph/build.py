@@ -59,19 +59,19 @@ PLEASANTRIES_AROUND_A_NUMBER = frozenset(
 
 
 GREETING = (
-    "Hello — I'm the assistant for Riverbend Dental Care. I can answer "
+    "Hello — I'm the assistant for Riverbend Diagnostics. I can answer "
     "questions about our services, prices, hours and policies, book you an "
     "appointment, or pass on a complaint. What can I help with?"
 )
 
 FAREWELL = (
     "You're welcome — take care. If you need anything else, just ask, or "
-    "call the clinic on (503) 555-0142."
+    "call the laboratory on (503) 555-0142."
 )
 
 OUT_OF_SCOPE = (
     "That's outside what I can help with, I'm afraid — I only handle things "
-    "to do with Riverbend Dental Care. I can answer questions about our "
+    "to do with Riverbend Diagnostics. I can answer questions about our "
     "services, prices, hours and policies, book an appointment, or pass on a "
     "complaint."
 )
@@ -177,11 +177,11 @@ def complaint_node(state: AssistantState) -> dict[str, Any]:
 
 
 def other_node(state: AssistantState) -> dict[str, Any]:
-    """Handle greetings, thanks and anything outside the clinic's scope.
+    """Handle greetings, thanks and anything outside the laboratory's scope.
 
     A small node rather than a fourth agent, because there is nothing to
     retrieve, book or record. Routing "hi" to the RAG agent would produce
-    "I don't have that in the clinic's information", which is technically
+    "I don't have that in the laboratory's information", which is technically
     true and a terrible first impression.
 
     `other` covers two quite different cases, and answering them the same
@@ -222,7 +222,7 @@ def other_node(state: AssistantState) -> dict[str, Any]:
         answer = f"{greeting}{seen}What can I help with today?"
     else:
         # Classified as `other` by the model: a real message about
-        # something the clinic does not do.
+        # something the laboratory does not do.
         kind = "out_of_scope"
         answer = OUT_OF_SCOPE
 
@@ -409,7 +409,7 @@ def stream(
     The agents' own LLM calls are not streamed, so there are no tokens to
     emit. What the graph *can* report is which node is running, and that
     turns out to be the more useful signal anyway: "routing", then
-    "searching the clinic's documents", then an answer. A five-second
+    "searching the laboratory's documents", then an answer. A five-second
     wait with visible progress reads as work; the same wait with a blank
     screen reads as broken.
 

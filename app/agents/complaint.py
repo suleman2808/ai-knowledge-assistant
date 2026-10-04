@@ -52,7 +52,7 @@ FALLBACK_REPLY = (
     "Thank you for telling us — I'm sorry this happened. I've logged it as "
     "{reference} and passed it to our practice manager, Fiona Adeyemi, who "
     "will look into it. You can reach her on (503) 555-0142 or at "
-    "fiona@riverbenddental.example."
+    "fiona@riverbenddiagnostics.example."
 )
 
 NOT_A_COMPLAINT = (
@@ -206,7 +206,7 @@ def _escalation_decision(assessment: dict[str, Any]) -> tuple[bool, list[str]]:
     if assessment["severity"] == "high":
         # Every high-severity complaint reaches a human. The prompt's own
         # definition of "high" — failed treatment, a significant billing
-        # error, repeated unanswered contact — describes cases a clinic
+        # error, repeated unanswered contact — describes cases a laboratory
         # would always want its practice manager to see. Leaving this to
         # the model's judgement let a double-billing complaint with three
         # ignored phone calls through unescalated during testing.

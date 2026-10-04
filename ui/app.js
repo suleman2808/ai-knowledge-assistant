@@ -85,7 +85,7 @@ function addMessage(who, html) {
 
 const STAGE_LABELS = {
   router: 'Working out what you need',
-  inquiry: 'Searching the clinic’s documents',
+  inquiry: 'Searching the laboratory’s documents',
   booking: 'Checking the appointment diary',
   complaint: 'Recording your complaint',
   other: 'Thinking',
@@ -116,7 +116,7 @@ function renderMeta(bubble, data) {
   if (data.grounded === true) {
     const badge = document.createElement('span');
     badge.className = 'badge';
-    badge.textContent = 'From clinic documents';
+    badge.textContent = 'From laboratory documents';
     meta.appendChild(badge);
   } else if (data.grounded === false) {
     const badge = document.createElement('span');
@@ -281,7 +281,7 @@ async function checkHealth() {
 }
 
 addMessage('assistant', renderMarkdown(
-  'Hello — I’m the assistant for Riverbend Dental Care. I can answer ' +
+  'Hello — I’m the assistant for Riverbend Diagnostics. I can answer ' +
   'questions about our services, prices, hours and policies, book you an ' +
   'appointment, or pass on a complaint. What can I help with?'
 ));

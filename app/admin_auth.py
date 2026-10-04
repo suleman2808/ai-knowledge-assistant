@@ -5,7 +5,7 @@ That is the material this project has been careful about everywhere else,
 so it does not get served to whoever finds the URL.
 
 Deliberately a single shared password rather than user accounts. The
-dashboard has one audience — whoever runs the clinic — and a login
+dashboard has one audience — whoever runs the laboratory — and a login
 system with registration, password reset and roles would be more code
 than the thing it protects. When a second kind of user appears, this is
 the wrong design and should be replaced rather than extended.

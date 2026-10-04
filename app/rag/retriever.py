@@ -12,9 +12,9 @@ Three principles shape it:
    carrying a status the agent can act on, rather than an exception the
    API layer has to translate into an apology.
 2. **A weak match is not a match.** Vector search always returns its `k`
-   nearest neighbours, however far away they are. Ask a dental clinic's
+   nearest neighbours, however far away they are. Ask a diagnostic laboratory's
    knowledge base about car insurance and it will cheerfully return the
-   dental insurance page. Without a score threshold, the agent would
+   health insurance page. Without a score threshold, the agent would
    ground a confident wrong answer in that chunk. The threshold is the
    single most important line of defence against hallucination here.
 3. **Context is formatted for citation.** Chunks are numbered and labelled

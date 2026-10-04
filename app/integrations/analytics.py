@@ -1,4 +1,4 @@
-"""Analytics: every turn recorded, and a summary a clinic owner can use.
+"""Analytics: every turn recorded, and a summary a laboratory owner can use.
 
 Stored in SQLite, a single file created on first use. No server, no
 account, no setup — and it is a real SQL database, so the summary is
@@ -382,7 +382,7 @@ class SQLiteComplaintStore:
 def summary(*, days: int = 30, path: Path | None = None) -> dict[str, Any]:
     """Answer "what are patients contacting us about, and how well?"
 
-    Structured around questions a clinic owner would ask, not around the
+    Structured around questions a laboratory owner would ask, not around the
     database schema:
 
     - What do people want? (intent mix)
@@ -419,7 +419,7 @@ def summary(*, days: int = 30, path: Path | None = None) -> dict[str, Any]:
         ).fetchone()
 
         # The most valuable output here. Every question the assistant had
-        # to decline is a gap in the clinic's documents — something a
+        # to decline is a gap in the laboratory's documents — something a
         # patient wanted to know that nobody has written down.
         gaps = [
             {"question": r["message"], "times": r["n"], "best_score": r["best"]}

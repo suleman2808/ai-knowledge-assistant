@@ -1,91 +1,102 @@
 # Our Team
 
-## Dr Marianne Okafor — Principal Dentist
+## Dr Marianne Okafor — Consultant Pathologist and Laboratory Director
 
-Marianne founded Riverbend Dental Care in 2011. She qualified from the
-University of Washington School of Dentistry in 2003 and spent eight years
-in community dental practice in Tacoma before opening the clinic.
+Marianne founded Riverbend Diagnostics in 2011. She qualified in medicine
+at the University of Washington in 2003 and completed her pathology
+residency at Oregon Health & Science University in 2009, with
+subspecialty training in haematopathology.
 
-Her clinical focus is restorative and implant dentistry. She completed the
-Advanced Implantology programme at Oregon Health & Science University in
-2016 and places around 120 implants a year.
+She authorises every critical result and reviews all peripheral smears
+and bone marrow reports personally. She is responsible for the
+laboratory's accreditation and for its quality control programme.
 
-Marianne is available Monday, Tuesday, Wednesday and Friday. She speaks
-English and Igbo.
+Marianne is based at Hawthorne, Monday to Friday. She speaks English and
+Igbo.
 
-## Dr Samuel Reyes — Associate Dentist
+## Dr Samuel Reyes — Consultant Pathologist, Microbiology
 
-Samuel joined in 2019. He qualified from Oregon Health & Science University
-in 2015 and worked in a large group practice in Beaverton before moving to
-Riverbend.
+Samuel joined in 2019. He qualified at Oregon Health & Science University
+in 2012 and trained in clinical microbiology, with a particular interest
+in antimicrobial resistance.
 
-He has a particular interest in treating anxious and phobic patients and
-completed certification in behavioural management and conscious sedation
-techniques in 2021. Patients who have avoided dentistry for years are
-usually booked with Samuel.
+He oversees all culture and sensitivity reporting, and reviews every
+positive blood culture before it is released. The laboratory's policy of
+never releasing a culture early is his.
 
-Samuel is available Tuesday, Wednesday, Thursday and alternate Saturdays.
-He speaks English and Spanish.
+Samuel is based at Hawthorne, Tuesday to Saturday. He speaks English and
+Spanish.
 
-## Dr Priya Raman — Associate Dentist, Orthodontics
+## Dr Priya Raman — Consultant Chemical Pathologist
 
-Priya joined in 2022 and leads our orthodontic service. She qualified from
-the University of the Pacific in 2014 and completed a three-year
-orthodontic residency at the University of Michigan in 2018.
+Priya joined in 2022 and leads biochemistry and endocrinology. She
+qualified at the University of the Pacific in 2010 and completed training
+in chemical pathology at the University of Michigan in 2016.
 
-She treats adults and adolescents with clear aligners and fixed
-appliances. She does not treat children under 11, who are referred to a
-paediatric orthodontist.
+She sets the laboratory's reference ranges and is the person who decides
+when a method change means results are no longer comparable with older
+ones.
 
-Priya is available Monday, Thursday and Friday. She speaks English, Tamil
-and Hindi.
+Priya is based at Hawthorne, Monday, Thursday and Friday. She speaks
+English, Tamil and Hindi.
 
-## Alice Brennan — Lead Dental Hygienist
+## Alice Brennan — Chief Phlebotomist
 
-Alice has worked with us since 2014 and qualified from Portland Community
-College in 2009. She carries out hygiene visits, periodontal treatment and
-oral health coaching.
+Alice has been with us since 2014 and qualified at Portland Community
+College in 2009. She runs collection across all three branches and trains
+every phlebotomist we hire.
 
-She runs our gum health programme for patients with periodontitis, and much
-of the practice's success in stabilising advanced gum disease is her work.
+If a draw has been difficult elsewhere, ask for Alice. Patients with
+small or scarred veins are usually booked with her, and she takes the
+paediatric list at Hawthorne.
 
-Alice is available Monday through Thursday.
+Alice is at Hawthorne Monday to Thursday, Beaverton on Fridays.
 
-## Tomas Lindqvist — Dental Hygienist
+## Tomas Lindqvist — Senior Phlebotomist, Home Collection
 
-Tomas joined in 2023, having qualified from Lane Community College in 2020.
-He works with our higher-risk patients, including those with diabetes and
-patients undergoing cancer treatment, where oral care needs careful
-coordination with medical teams.
+Tomas joined in 2023 and qualified at Lane Community College in 2020. He
+runs the home collection service and covers patients who cannot easily
+travel — post-operative, elderly, immobile, or undergoing chemotherapy
+where infection risk makes a waiting room a bad idea.
 
-Tomas is available Wednesday through Saturday. He speaks English and
-Swedish.
+Tomas works Monday to Saturday mornings. He speaks English and Swedish.
 
 ## Fiona Adeyemi — Practice Manager
 
-Fiona manages the administrative side of the practice: billing, insurance
-claims, complaints and payment arrangements.
+Fiona handles billing, insurance claims, corporate accounts, complaints
+and payment arrangements.
 
-If you have a problem with an account, a claim, or the service you have
-received, Fiona is the person to ask for. She is contactable on
-(503) 555-0142 or at fiona@riverbenddental.example, and is in the practice
-Monday through Friday.
+If you have a problem with an account, a claim, or the service you
+received, Fiona is the person to ask for. She is reachable on
+(503) 555-0142 or fiona@riverbenddiagnostics.example, Monday to Friday.
 
-## Reception Team
+## Reception
 
-Daniel Ortiz and Keisha Thompson staff reception and handle booking,
-reminders and general enquiries. Between them they cover all opening hours
-including Saturdays.
+Daniel Ortiz at Hawthorne, Keisha Thompson at Beaverton, and Mei Lin at
+Gresham. Between them they cover all collection hours including weekends.
 
-## Our Approach
+Reception staff can tell you whether a report is ready, what a test
+measures in general terms, how a sample is collected, and what a test
+costs. They cannot interpret a result, and asking them to is asking them
+to do something they are specifically instructed not to do.
 
-We do not work to sales targets and no member of clinical staff is paid a
-commission on treatment. We think this matters, and we say so plainly
-because patients often ask.
+## Accreditation and Quality
 
-Where a problem can reasonably be monitored rather than treated, we will
-tell you that is an option. Where we think treatment is genuinely needed,
-we will tell you why, in writing, with the cost.
+The laboratory participates in external quality assessment schemes for
+every discipline it reports. Results from those schemes are reviewed
+monthly by the laboratory director.
 
-You are always entitled to a second opinion, and we will forward your
-records and X-rays to another practice at no charge if you ask.
+Internal controls are run with every batch. Where a control fails, the
+batch is repeated rather than released — which is occasionally why a
+report is late with no obvious reason, and we will tell you that is what
+happened if you ask.
+
+## How We Work
+
+No member of staff is paid a commission on tests ordered, and no member
+of clinical staff has a target.
+
+Where a test you have asked for seems unnecessary, duplicated, or wrong
+for what you have described, we will say so before taking the sample. We
+cannot tell you what to do about a symptom, but we can tell you when a
+test will not answer the question you are asking.

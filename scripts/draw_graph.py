@@ -40,7 +40,7 @@ FOOTER = """```
 | `inquiry` | Answers from retrieved documents, or refuses. Never answers from model knowledge. |
 | `booking` | Extracts appointment details, checks availability, writes to the calendar. |
 | `complaint` | Assesses severity, logs the complaint, escalates by rule. |
-| `other` | Greetings, thanks, and messages outside the clinic's scope. |
+| `other` | Greetings, thanks, and messages outside the laboratory's scope. |
 | `finalise` | Appends any secondary-intent note and assembles the turn record for analytics. |
 
 Every path converges on `finalise`, so logging happens in one place

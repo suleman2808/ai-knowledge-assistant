@@ -4,7 +4,7 @@ Defined as a protocol with two implementations so the agent can be built
 and tested before any OAuth exists, and so a fresh clone runs end to end
 with no Google Cloud setup:
 
-- `InMemoryCalendar` — a working fake with the clinic's real opening
+- `InMemoryCalendar` — a working fake with the laboratory's real opening
   hours and a few pre-existing appointments. Used automatically when
   Google credentials are absent.
 - `GoogleCalendar` — the real thing. Added in step 6.
@@ -29,40 +29,51 @@ class CalendarError(RuntimeError):
     """The calendar could not be read or written."""
 
 
-# Clinic opening hours, mirroring data/documents/hours-and-location.md.
+# Laboratory opening hours, mirroring data/documents/hours-and-location.md.
 # Keyed by weekday number, Monday = 0. A missing key means closed.
+# Collection hours at the Hawthorne laboratory, mirroring
+# data/documents/hours-and-locations.md. Monday = 0; a missing key means
+# closed. Hawthorne is the only branch open on Sunday.
 OPENING_HOURS: dict[int, tuple[time, time]] = {
-    0: (time(8, 0), time(17, 0)),
-    1: (time(8, 0), time(17, 0)),
-    2: (time(8, 0), time(19, 0)),
-    3: (time(8, 0), time(17, 0)),
-    4: (time(8, 0), time(15, 0)),
-    5: (time(9, 0), time(13, 0)),  # first and third Saturday only
+    0: (time(6, 30), time(18, 0)),
+    1: (time(6, 30), time(18, 0)),
+    2: (time(6, 30), time(18, 0)),
+    3: (time(6, 30), time(18, 0)),
+    4: (time(6, 30), time(18, 0)),
+    5: (time(7, 0), time(14, 0)),
+    6: (time(8, 0), time(12, 0)),
 }
 
-# The last appointment starts one hour before closing.
-LAST_BOOKING_BUFFER = timedelta(hours=1)
+# A collection appointment cannot start in the last half hour: the
+# sample has to be taken, labelled and logged before the doors close.
+LAST_BOOKING_BUFFER = timedelta(minutes=30)
 
-# Appointment length by service, from the pricing document. The default
-# covers anything unrecognised.
+# How long a collection takes, by what was asked for. Most blood draws
+# are quick; the glucose tolerance test occupies a chair for over two
+# hours, which is why it must be booked rather than walked in.
 SERVICE_DURATIONS: dict[str, int] = {
-    "new patient exam": 45,
-    "check-up": 20,
-    "examination": 20,
-    "cleaning": 40,
-    "hygiene": 40,
-    "deep cleaning": 60,
-    "filling": 45,
-    "crown": 90,
-    "root canal": 90,
-    "extraction": 30,
-    "wisdom tooth": 60,
-    "whitening": 90,
-    "implant": 120,
-    "orthodontic consultation": 45,
-    "emergency": 30,
+    "glucose tolerance": 150,
+    "gtt": 150,
+    "blood culture": 20,
+    "full blood count": 10,
+    "fbc": 10,
+    "cbc": 10,
+    "lipid profile": 10,
+    "thyroid": 10,
+    "hba1c": 10,
+    "blood test": 10,
+    "blood draw": 10,
+    "urine": 10,
+    "stool": 10,
+    "swab": 10,
+    "covid": 10,
+    "health check": 20,
+    "basic health check": 20,
+    "panel": 20,
+    "pre-employment": 20,
+    "home collection": 30,
 }
-DEFAULT_DURATION_MINUTES = 30
+DEFAULT_DURATION_MINUTES = 15
 
 
 @dataclass
@@ -153,7 +164,7 @@ def duration_for(service: str) -> int:
 
 
 def is_open(moment: datetime) -> bool:
-    """Whether the clinic is open at `moment`, allowing for closing time."""
+    """Whether the laboratory is open at `moment`, allowing for closing time."""
     hours = OPENING_HOURS.get(moment.weekday())
     if not hours:
         return False

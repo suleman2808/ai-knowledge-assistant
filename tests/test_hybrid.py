@@ -77,7 +77,7 @@ def test_words_the_corpus_has_never_seen_lower_coverage() -> None:
 
     A query word absent from every document gets maximal IDF. That is
     what correctly sinks "renew my car insurance" — "renew" appears
-    nowhere, because the clinic does not do that. The cost is that
+    nowhere, because the laboratory does not do that. The cost is that
     unfamiliar filler ("yo", "ur") lowers coverage too, so a slangy
     brand-name question can miss the keyword path.
 

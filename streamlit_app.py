@@ -26,7 +26,7 @@ import os
 import streamlit as st
 
 st.set_page_config(
-    page_title="Riverbend Dental Care — Assistant",
+    page_title="Riverbend Diagnostics — Assistant",
     page_icon="🦷",
     layout="centered",
 )
@@ -65,7 +65,7 @@ INTENT_LABELS = {
 }
 
 GREETING = (
-    "Hello — I'm the assistant for Riverbend Dental Care. I can answer "
+    "Hello — I'm the assistant for Riverbend Diagnostics. I can answer "
     "questions about our services, prices, hours and policies, book you an "
     "appointment, or pass on a complaint. What can I help with?"
 )
@@ -100,7 +100,7 @@ def render_sources(turn: dict) -> None:
     if INTENT_LABELS.get(turn.get("intent")):
         chips.append(INTENT_LABELS[turn["intent"]])
     if grounded is True:
-        chips.append("From clinic documents")
+        chips.append("From laboratory documents")
     elif grounded is False:
         chips.append("Not in our documents")
     if turn.get("latency_ms"):
@@ -119,10 +119,10 @@ def render_sources(turn: dict) -> None:
 
 
 def main() -> None:
-    st.title("🦷 Riverbend Dental Care")
+    st.title("🔬 Riverbend Diagnostics")
     st.caption(
-        "2418 SE Hawthorne Blvd, Portland · (503) 555-0142 — "
-        "an AI assistant that answers only from the clinic's own documents."
+        "Hawthorne · Beaverton · Gresham · (503) 555-0142 — an AI assistant "
+        "that answers only from the laboratory's own documents."
     )
 
     if not settings.llm_configured:
@@ -140,9 +140,9 @@ def main() -> None:
     with st.sidebar:
         st.subheader("Try asking")
         for suggestion in (
-            "How much is a root canal on a molar?",
-            "Do you take Delta Dental?",
-            "What should I avoid after an extraction?",
+            "How much is a full blood count?",
+            "Do I need to fast for a lipid profile?",
+            "When will my report be ready?",
             "I waited 40 minutes and nobody apologised",
         ):
             if st.button(suggestion, use_container_width=True):
@@ -164,6 +164,11 @@ def main() -> None:
             "token is deliberately not committed, so a deployed instance "
             "cannot write to a real diary.",
             icon="📅",
+        )
+        st.warning(
+            "It will not interpret a result. That is a doctor's job, and "
+            "the laboratory's own documents say so.",
+            icon="⚕️",
         )
 
     if "history" not in st.session_state:
@@ -190,7 +195,7 @@ def main() -> None:
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Searching the clinic's documents…"):
+        with st.spinner("Searching the laboratory's documents…"):
             try:
                 turn = run(
                     question,
@@ -200,7 +205,7 @@ def main() -> None:
             except Exception as exc:  # the UI must not show a traceback
                 st.error(
                     "Something went wrong at our end. Please try again, or "
-                    "call the clinic on (503) 555-0142."
+                    "call the laboratory on (503) 555-0142."
                 )
                 st.caption(f"({type(exc).__name__})")
                 return

@@ -4,7 +4,7 @@ Vector search matches by meaning, which is its strength and its blind
 spot. It handles "my tooth got knocked out" finding a section titled
 "First Aid" with no shared words. It fails on the opposite case: a bare
 proper noun. "do you take cigna" scored 0.23 against the insurance page
-that literally lists "Cigna Dental PPO", because an embedding model gives
+that literally lists "Cigna Healthcare PPO", because an embedding model gives
 a brand name very little semantic weight.
 
 BM25 is the complement. It scores exact term overlap, weighting rare

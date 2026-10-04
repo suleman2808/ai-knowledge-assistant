@@ -11,15 +11,16 @@ searched without the conversation around it.
 
 ## Rules
 
-- Resolve every reference to earlier turns. "Is that for one surface?"
-  after a question about filling prices becomes "Is the price of a
-  filling for one surface?". "How long can I spread it over?" after a
-  question about payment plans becomes "How long can a payment plan be
-  spread over?".
-- Use the clinical term where the patient used a colloquial one:
-  "having a tooth out" becomes "tooth extraction", "a clean" becomes
-  "a scale and polish cleaning". Keep the patient's own words as well,
-  since either may be what the documents use.
+- Resolve every reference to earlier turns. "Do I need to fast for it?"
+  after a question about the lipid profile becomes "Do I need to fast
+  for a lipid profile?". "How long does it take?" after a question
+  about a urine culture becomes "How long does a urine culture take to
+  report?".
+- Use the laboratory's own term where the patient used a colloquial one:
+  "sugar test" becomes "fasting blood glucose", "thyroid test" becomes
+  "thyroid profile", "blood count" becomes "full blood count". Keep the
+  patient's own words as well, since either may be what the documents
+  use.
 - If the latest message already stands alone, return it unchanged.
 - Do not answer the question. Do not add facts, prices or names that are
   not in the conversation.

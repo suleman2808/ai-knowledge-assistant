@@ -201,11 +201,11 @@ def stub_extraction(monkeypatch: pytest.MonkeyPatch, payload: dict) -> None:
 def test_booking_asks_only_for_what_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     stub_extraction(
         monkeypatch,
-        {"service": "check-up", "date": next_weekday(0).isoformat(), "time": None,
+        {"service": "basic health check", "date": next_weekday(0).isoformat(), "time": None,
          "time_preference": "morning", "patient_name": None, "phone": None},
     )
 
-    response = handle_booking("check-up monday morning", backend=InMemoryCalendar())
+    response = handle_booking("health check monday morning", backend=InMemoryCalendar())
 
     assert response.needs_followup is True
     assert set(response.metadata["missing"]) == {"patient_name", "phone"}
@@ -219,7 +219,7 @@ def test_booking_does_not_show_iso_dates_to_patients(
     target = next_weekday(0)
     stub_extraction(
         monkeypatch,
-        {"service": "check-up", "date": target.isoformat(), "time": None,
+        {"service": "basic health check", "date": target.isoformat(), "time": None,
          "time_preference": "morning", "patient_name": None, "phone": None},
     )
 
@@ -234,7 +234,7 @@ def test_booking_creates_an_appointment_when_details_are_complete(
     target = next_weekday(1)  # a Tuesday
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": target.isoformat(), "time": "14:00",
+        {"service": "full blood count", "date": target.isoformat(), "time": "14:00",
          "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "503-555-0180", "notes": None},
     )
@@ -249,27 +249,29 @@ def test_booking_creates_an_appointment_when_details_are_complete(
     booked = calendar.appointments[0]
     assert booked.patient_name == "Sarah Chen"
     assert booked.start.hour == 14
-    # Cleaning is a 40-minute appointment.
-    assert booked.end - booked.start == timedelta(minutes=40)
+    # A full blood count is a ten-minute collection.
+    assert booked.end - booked.start == timedelta(minutes=10)
 
 
 def test_booking_refuses_a_time_outside_opening_hours(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    target = next_weekday(6)  # Sunday, closed
+    # Every day is a collection day, so the out-of-hours case is a time,
+    # not a day: 9pm on a weekday.
+    target = next_weekday(2)
     stub_extraction(
         monkeypatch,
-        {"service": "check-up", "date": target.isoformat(), "time": "10:00",
+        {"service": "basic health check", "date": target.isoformat(), "time": "21:00",
          "time_preference": None, "patient_name": "Ana Silva",
          "phone": "503-555-0111", "notes": None},
     )
     calendar = InMemoryCalendar(appointments=[])
 
-    response = handle_booking("sunday please", backend=calendar)
+    response = handle_booking("9pm please", backend=calendar)
 
-    assert calendar.appointments == [], "must not book when the clinic is closed"
+    assert calendar.appointments == [], "must not book when the laboratory is closed"
     assert response.needs_followup is True
-    assert "closed on Sunday" in response.answer
+    assert "hours are" in response.answer
 
 
 def test_booking_offers_alternatives_when_the_slot_is_taken(
@@ -289,7 +291,7 @@ def test_booking_offers_alternatives_when_the_slot_is_taken(
     )
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": target.isoformat(), "time": "14:00",
+        {"service": "full blood count", "date": target.isoformat(), "time": "14:00",
          "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "503-555-0180", "notes": None},
     )
@@ -305,7 +307,7 @@ def test_booking_rejects_a_date_in_the_past(monkeypatch: pytest.MonkeyPatch) -> 
     """A past date means the model mis-resolved a relative reference."""
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": "2020-01-01", "time": "14:00",
+        {"service": "full blood count", "date": "2020-01-01", "time": "14:00",
          "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "503-555-0180", "notes": None},
     )
@@ -322,7 +324,7 @@ def test_booking_rejects_an_implausible_phone_number(
 ) -> None:
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": next_weekday(1).isoformat(), "time": "14:00",
+        {"service": "full blood count", "date": next_weekday(1).isoformat(), "time": "14:00",
          "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "call me maybe", "notes": None},
     )
@@ -344,7 +346,7 @@ def test_booking_survives_a_calendar_outage(monkeypatch: pytest.MonkeyPatch) -> 
 
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": next_weekday(1).isoformat(), "time": "14:00",
+        {"service": "full blood count", "date": next_weekday(1).isoformat(), "time": "14:00",
          "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "503-555-0180", "notes": None},
     )
@@ -369,18 +371,21 @@ def test_booking_degrades_when_extraction_fails(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_service_durations_prefer_the_longest_match() -> None:
-    assert duration_for("deep cleaning please") == 60
-    assert duration_for("just a cleaning") == 40
-    assert duration_for("something unheard of") == 30
+    """"glucose tolerance" must beat nothing, and an unknown test still
+    gets a slot rather than failing."""
+    assert duration_for("glucose tolerance test please") == 150
+    assert duration_for("just a full blood count") == 10
+    assert duration_for("something unheard of") == 15
 
 
-def test_last_appointment_is_an_hour_before_closing() -> None:
-    friday = next_weekday(4)
-    at_two = datetime.combine(friday, datetime.min.time()).replace(hour=14)
-    at_half_two = at_two + timedelta(minutes=30)
+def test_collection_stops_before_the_doors_close() -> None:
+    """A sample has to be taken, labelled and logged before closing."""
+    saturday = next_weekday(5)
+    at_one_fifteen = datetime.combine(saturday, datetime.min.time()).replace(hour=13, minute=15)
+    at_one_forty_five = at_one_fifteen + timedelta(minutes=30)
 
-    assert is_open(at_two) is True, "Friday closes at 3pm, so 2pm is bookable"
-    assert is_open(at_half_two) is False, "2:30pm leaves under an hour"
+    assert is_open(at_one_fifteen) is True, "Saturday closes at 2pm"
+    assert is_open(at_one_forty_five) is False, "under the 30-minute buffer"
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +549,7 @@ def test_demo_booking_does_not_promise_reminders(monkeypatch: pytest.MonkeyPatch
     target = next_weekday(1)
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": target.isoformat(), "date_phrase": None,
+        {"service": "full blood count", "date": target.isoformat(), "date_phrase": None,
          "time": "14:00", "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "503-555-0180", "notes": None},
     )
@@ -569,7 +574,7 @@ def test_real_calendar_booking_keeps_the_clinic_policy(
     target = next_weekday(1)
     stub_extraction(
         monkeypatch,
-        {"service": "cleaning", "date": target.isoformat(), "date_phrase": None,
+        {"service": "full blood count", "date": target.isoformat(), "date_phrase": None,
          "time": "14:00", "time_preference": None, "patient_name": "Sarah Chen",
          "phone": "503-555-0180", "notes": None},
     )
@@ -597,14 +602,14 @@ def test_the_reply_only_claims_an_email_that_was_actually_sent(
 
     target = next_weekday(1)
     payload = {
-        "service": "cleaning", "date": target.isoformat(), "date_phrase": None,
+        "service": "full blood count", "date": target.isoformat(), "date_phrase": None,
         "time": "14:00", "time_preference": None, "patient_name": "Sarah Chen",
         "phone": "503-555-0180", "notes": None,
     }
 
     stub_extraction(monkeypatch, payload)
     notified = handle_booking("book it", backend=NotifyingCalendar(appointments=[]))
-    assert "emailed to the clinic" in notified.answer
+    assert "emailed to the laboratory" in notified.answer
 
     stub_extraction(monkeypatch, payload)
     silent = handle_booking("book it", backend=SilentCalendar(appointments=[]))

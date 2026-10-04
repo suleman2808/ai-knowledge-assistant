@@ -28,7 +28,7 @@ To get credentials.json:
 
  1. Go to https://console.cloud.google.com/  and sign in.
  2. Create a project (top-left project picker -> New Project).
-    Name it anything, e.g. "dental-assistant".
+    Name it anything, e.g. "lab-assistant".
  3. Enable the API:
     APIs & Services -> Library -> search "Google Calendar API" -> Enable.
  4. Configure the consent screen:
@@ -68,7 +68,7 @@ def check() -> int:
 
     if info["timezone"] and info["timezone"] != settings.clinic_timezone:
         print(
-            f"\n  Note: the calendar's own timezone differs from the clinic's. "
+            f"\n  Note: the calendar's own timezone differs from the laboratory's. "
             f"Events are written with an explicit timezone so this is safe, "
             f"but times will display in {info['timezone']} in Google's UI."
         )

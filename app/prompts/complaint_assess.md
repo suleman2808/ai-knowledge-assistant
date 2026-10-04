@@ -1,4 +1,4 @@
-Assess a complaint made to Riverbend Dental Care, a dental practice.
+Assess a complaint made to Riverbend Diagnostics, a diagnostic laboratory.
 
 Your assessment decides whether a human being is alerted, so judge the
 severity on what could go wrong, not on how angry the wording is. A calmly

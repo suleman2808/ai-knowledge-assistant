@@ -1,7 +1,7 @@
 """Inquiry Agent — answers questions strictly from retrieved documents.
 
 The agent is a pipeline with two independent safeguards against answering
-something the clinic's documents do not actually say:
+something the laboratory's documents do not actually say:
 
 1. **The retrieval threshold** (in `app.rag.retriever`) drops matches that
    are not close enough to be worth considering.
@@ -12,7 +12,7 @@ something the clinic's documents do not actually say:
 
 The second safeguard exists because the first is provably insufficient.
 Measured on this corpus, "what time does the cinema open" scores 0.422 and
-retrieves the clinic's opening-hours table, out-scoring legitimate
+retrieves the laboratory's opening-hours table, out-scoring legitimate
 questions about parking (0.380) and billing (0.384). No threshold
 separates those cases, so the model is asked to make the final judgement
 with the evidence in front of it.
@@ -42,18 +42,18 @@ INSUFFICIENT = "INSUFFICIENT_CONTEXT"
 # it names the limitation, offers a real alternative, and does not
 # pretend the question was unreasonable.
 NO_ANSWER = (
-    "I don't have that in the clinic's information, so I'd rather not guess. "
+    "I don't have that in the laboratory's information, so I'd rather not guess. "
     "Please call us on (503) 555-0142 and the team can answer properly — or "
     "ask me something else about our services, hours, policies or treatments."
 )
 
 NOT_INGESTED = (
     "My knowledge base hasn't been set up yet, so I can't answer questions "
-    "about the clinic. Please call (503) 555-0142 for help."
+    "about the laboratory. Please call (503) 555-0142 for help."
 )
 
 SEARCH_DOWN = (
-    "I can't search the clinic's information right now. Please call "
+    "I can't search the laboratory's information right now. Please call "
     "(503) 555-0142 and someone will help you straight away."
 )
 
@@ -170,7 +170,7 @@ def answer_inquiry(
     *,
     history: list[dict[str, str]] | None = None,
 ) -> AgentResponse:
-    """Answer a question using only the clinic's documents.
+    """Answer a question using only the laboratory's documents.
 
     Args:
         question: The patient's question, verbatim.

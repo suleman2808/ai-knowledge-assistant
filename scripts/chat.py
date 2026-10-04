@@ -22,30 +22,29 @@ from app.graph.build import run
 # routing accuracy, including the cases designed to be hard.
 ROUTING_PROBES: list[tuple[str, str]] = [
     # Unambiguous
-    ("how much is a crown", "inquiry"),
-    ("what time do you open on Saturday", "inquiry"),
-    ("can I book a cleaning for next Tuesday", "booking"),
+    ("how much is a full blood count", "inquiry"),
+    ("are you open on sunday", "inquiry"),
+    ("can I book a blood test next Tuesday", "booking"),
     ("I need to move my appointment to Thursday", "booking"),
     ("I waited an hour and nobody said sorry", "complaint"),
     ("hi", "other"),
     ("thanks, that's all", "other"),
-    # Policy question vs. diary change — the classic confusion
+    # Policy question versus diary change
     ("what is your cancellation policy", "inquiry"),
-    ("I need to cancel Tuesday's appointment", "booking"),
-    # Treatment mentioned, but not a booking
-    ("how long does a root canal take", "inquiry"),
-    ("do I need a crown after a root canal", "inquiry"),
+    ("I need to cancel Tuesday's home collection", "booking"),
+    # Naming a test is not booking one
+    ("how long does a urine culture take", "inquiry"),
+    ("do I need to fast for a lipid profile", "inquiry"),
     # Angry, but still a question
-    ("why on earth are your crowns so expensive", "inquiry"),
+    ("why on earth are your panels so expensive", "inquiry"),
     # Grievance that ends in a request
-    ("my filling fell out after two weeks, this is ridiculous", "complaint"),
-    # Billing: complaint vs. inquiry
-    ("do you take Delta Dental", "inquiry"),
+    ("my report is three days late and nobody has called, this is ridiculous", "complaint"),
+    # Billing: complaint versus inquiry
+    ("do you take cigna", "inquiry"),
     ("I've been charged twice and nobody has called me back", "complaint"),
-    # Mixed intent: the complaint must win, because an unrecorded
-    # complaint is lost whereas an unmade booking gets asked for again.
-    ("I waited 40 minutes last time and I'm furious, anyway can I book a cleaning Tuesday", "complaint"),
-    # Out of scope for a dental practice entirely.
+    # Mixed intent: the complaint must win
+    ("I waited 40 minutes last time and I'm furious, anyway can I book a blood test Tuesday", "complaint"),
+    # Out of scope for a laboratory
     ("what time does the cinema open", "other"),
     ("can you help me renew my car insurance", "other"),
 ]
@@ -53,17 +52,21 @@ ROUTING_PROBES: list[tuple[str, str]] = [
 SCENARIOS: dict[str, list[str]] = {
     "booking": [
         "hi",
-        "I'd like to book a cleaning",
-        "next Tuesday afternoon works",
+        "I'd like to book a full blood count",
+        "next Tuesday morning works",
         "Sarah Chen, 503-555-0180",
         "thanks",
     ],
     "complaint": [
-        "I was charged twice for the same filling and nobody has called me back",
+        "I was charged twice for the same panel and nobody has called me back",
         "what is your complaints procedure",
     ],
     "mixed": [
-        "I waited 40 minutes last time and I'm furious, anyway can I book a cleaning Tuesday",
+        "I waited 40 minutes last time and I'm furious, anyway can I book a blood test Tuesday",
+    ],
+    "results": [
+        "when will my report be ready",
+        "my haemoglobin is 9.2, is that bad?",
     ],
 }
 
@@ -139,7 +142,7 @@ def scenario(name: str) -> int:
 
 
 def interactive() -> int:
-    print("Riverbend Dental Care assistant. Ctrl-C or 'quit' to exit.\n")
+    print("Riverbend Diagnostics assistant. Ctrl-C or 'quit' to exit.\n")
     history: list[dict[str, str]] = []
 
     while True:

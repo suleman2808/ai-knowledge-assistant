@@ -138,7 +138,7 @@ def main() -> int:
         ("ingest", ["-m", "scripts.ingest", "--quiet"]),
         ("pytest", ["-m", "pytest", "tests/", "-q"]),
         ("search", ["-m", "scripts.search", "do you take cigna"]),
-        ("chat", ["-m", "scripts.chat", "what time do you close on Friday"]),
+        ("chat", ["-m", "scripts.chat", "are you open on sunday"]),
     ]:
         code, output = run([str(python), *command], clone)
         report.check(name, code == 0, output.strip().splitlines()[-1] if code else "")
@@ -161,7 +161,7 @@ def main() -> int:
 
         try:
             reply = post_chat(f"http://127.0.0.1:{PORT}/api/chat",
-                              "how much is a root canal on a molar")
+                              "how much is a full blood count")
             report.check("chat answers", bool(reply.get("answer")))
             # The whole point of the project: the answer must come from the
             # documents, not from the model's own knowledge.
