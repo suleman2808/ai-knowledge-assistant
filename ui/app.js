@@ -11,6 +11,8 @@ const form = document.getElementById('composer');
 const input = document.getElementById('input');
 const sendButton = document.getElementById('send');
 const suggestions = document.getElementById('suggestions');
+const rail = document.getElementById('rail');
+const railScrim = document.getElementById('railScrim');
 
 let sessionId = '';
 let busy = false;
@@ -172,7 +174,6 @@ async function send(message) {
   addMessage('patient', renderMarkdown(message));
   input.value = '';
   input.style.height = 'auto';
-  suggestions.hidden = true;
   setBusy(true);
 
   const pending = addMessage('assistant', `
@@ -264,27 +265,117 @@ input.addEventListener('input', () => {
 });
 
 suggestions.addEventListener('click', (event) => {
-  if (event.target.tagName === 'BUTTON') send(event.target.textContent);
+  if (event.target.tagName !== 'BUTTON') return;
+  closeRail();
+  send(event.target.textContent);
 });
 
-async function checkHealth() {
-  const dot = document.getElementById('statusDot');
-  const text = document.getElementById('statusText');
-  try {
-    const health = await (await fetch('/api/health')).json();
-    dot.className = `dot ${health.status === 'ok' ? 'ok' : 'degraded'}`;
-    text.textContent = health.status === 'ok' ? 'Online' : 'Limited service';
-  } catch {
-    dot.className = 'dot down';
-    text.textContent = 'Offline';
+/**
+ * Fill the "under the hood" panel from /api/health.
+ *
+ * Everything shown is already public on that endpoint, and a visitor
+ * reading it learns what the thing is made of without opening the repo:
+ * which models, how many chunks, where embeddings run, and — the honest
+ * part — which calendar a booking would land in.
+ */
+const CALENDAR_LABELS = {
+  google: 'Google Calendar',
+  in_memory: 'In-memory (demo)',
+};
+
+function fact(term, value, extra) {
+  const row = document.createElement('div');
+  const dt = document.createElement('dt');
+  dt.textContent = term;
+  const dd = document.createElement('dd');
+  if (extra) dd.appendChild(extra);
+  if (value !== null && value !== undefined) {
+    const span = document.createElement('span');
+    span.textContent = value;
+    dd.appendChild(span);
   }
+  row.append(dt, dd);
+  return row;
 }
 
-addMessage('assistant', renderMarkdown(
+function monospace(text) {
+  const code = document.createElement('code');
+  code.textContent = text;
+  return code;
+}
+
+async function checkHealth() {
+  const facts = document.getElementById('facts');
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+
+  let health;
+  try {
+    health = await (await fetch('/api/health')).json();
+  } catch {
+    dot.classList.add('down');
+    facts.replaceChildren(fact('Status', 'Offline', dot));
+    return;
+  }
+
+  dot.classList.add(health.status === 'ok' ? 'ok' : 'degraded');
+  const rows = [
+    fact('Status', health.status === 'ok' ? 'Online' : 'Limited service', dot),
+  ];
+
+  const kb = health.checks?.knowledge_base;
+  if (kb?.chunks) {
+    rows.push(fact('Knowledge base', `${kb.chunks} chunks · ${kb.documents} docs`));
+  }
+
+  const llm = health.checks?.llm;
+  if (llm?.model) {
+    rows.push(fact('Agents', null, monospace(llm.model.split('/').pop())));
+    rows.push(fact('Router', null, monospace(llm.router_model.split('/').pop())));
+  }
+
+  const embeddings = health.checks?.embeddings;
+  if (embeddings?.backend) {
+    rows.push(fact('Embeddings', `Local · ${embeddings.backend}`));
+  }
+
+  const calendar = health.checks?.calendar;
+  if (calendar?.backend) {
+    rows.push(fact('Calendar', CALENDAR_LABELS[calendar.backend] || calendar.backend));
+  }
+
+  facts.replaceChildren(...rows);
+}
+
+/* The rail is a drawer on a narrow screen and a fixture on a wide one. */
+function closeRail() {
+  rail.classList.remove('open');
+  railScrim.hidden = true;
+}
+
+document.getElementById('railToggle').addEventListener('click', () => {
+  const open = rail.classList.toggle('open');
+  railScrim.hidden = !open;
+});
+railScrim.addEventListener('click', closeRail);
+
+document.getElementById('reset').addEventListener('click', () => {
+  if (busy) return;
+  sessionId = '';
+  transcript.replaceChildren();
+  greet();
+  input.focus();
+});
+
+function greet() {
+  addMessage('assistant', renderMarkdown(GREETING));
+}
+
+const GREETING =
   'Hello — I’m the assistant for Riverbend Diagnostics. I can answer ' +
   'questions about our services, prices, hours and policies, book you an ' +
-  'appointment, or pass on a complaint. What can I help with?'
-));
+  'appointment, or pass on a complaint. What can I help with?';
 
+greet();
 checkHealth();
 input.focus();

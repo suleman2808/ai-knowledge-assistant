@@ -5,53 +5,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Riverbend Diagnostics — Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/static/styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230f5c63'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' fill='white'>R</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%230f5c63'/><path d='M16 6.5c3.9 4.8 6.1 8.1 6.1 10.8a6.1 6.1 0 0 1-12.2 0c0-2.7 2.2-6 6.1-10.8z' fill='white'/></svg>">
 </head>
 <body>
 <div class="shell">
 
-  <header>
-    <div class="mark" aria-hidden="true">R</div>
-    <div class="who">
-      <h1>Riverbend Diagnostics</h1>
-      <p>Hawthorne &middot; Beaverton &middot; Gresham &middot; (503) 555-0142</p>
+  <!-- Left rail: what this is, what to ask it, and what it is made of.
+       A visitor arriving cold should not have to guess any of the three. -->
+  <aside class="rail" id="rail">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" focusable="false">
+          <rect width="32" height="32" rx="9" fill="currentColor"/>
+          <path d="M16 6.5c3.9 4.8 6.1 8.1 6.1 10.8a6.1 6.1 0 0 1-12.2 0c0-2.7 2.2-6 6.1-10.8z" fill="#fff"/>
+        </svg>
+      </span>
+      <div class="who">
+        <h1>Riverbend Diagnostics</h1>
+        <p>Medical diagnostic laboratory</p>
+      </div>
     </div>
-    <div class="spacer"></div>
-    <a class="status" href="/analytics" id="status" title="View analytics">
-      <span class="dot" id="statusDot"></span><span id="statusText">checking</span>
-    </a>
-  </header>
 
-  <main class="transcript" id="transcript" aria-live="polite" aria-label="Conversation"></main>
+    <div class="rail-scroll">
+      <section class="rail-block">
+        <h2>About this demo</h2>
+        <p>
+          A customer-facing assistant built around one rule: it answers from the
+          laboratory&rsquo;s own documents, or it says it cannot. A router reads each
+          message and hands it to one of three specialists &mdash; information,
+          appointments, complaints.
+        </p>
+      </section>
 
-  <div class="composer">
-    <div class="suggestions" id="suggestions">
-      <button type="button">How much is a full blood count?</button>
-      <button type="button">Do I need to fast for a lipid profile?</button>
-      <button type="button">Book a blood test next Tuesday at 8am</button>
-      <button type="button">When will my report be ready?</button>
+      <section class="rail-block">
+        <h2>Try asking</h2>
+        <div class="suggestions" id="suggestions">
+          <button type="button">How much is a full blood count?</button>
+          <button type="button">Do I need to fast for a lipid profile?</button>
+          <button type="button">Book a blood test next Tuesday at 8am</button>
+          <button type="button">When will my report be ready?</button>
+          <button type="button">My haemoglobin is 9.2, is that bad?</button>
+          <button type="button">Do you do allergy testing?</button>
+        </div>
+        <p class="hint">
+          The last two are the interesting ones &mdash; it declines to interpret a
+          result, and declines a service the documents do not cover.
+        </p>
+      </section>
+
+      <section class="rail-block">
+        <h2>Under the hood</h2>
+        <dl class="facts" id="facts">
+          <div><dt>Status</dt><dd><span class="dot" id="statusDot"></span><span id="statusText">checking</span></dd></div>
+        </dl>
+      </section>
+
+      <section class="rail-block">
+        <h2>Appointments</h2>
+        <p>
+          Bookings here are clash-checked and confirmed against an
+          <strong>in-memory</strong> diary. A public demo should not hold write
+          access to a real calendar, so no OAuth token is deployed. The calendar
+          is a swappable backend &mdash; run it locally with credentials and the
+          same code writes to Google.
+        </p>
+      </section>
+
+      <nav class="rail-links">
+        <a href="/admin">Staff dashboard</a>
+        <a href="/docs">API documentation</a>
+        <a href="https://github.com/suleman2808/ai-knowledge-assistant" target="_blank" rel="noopener">Source on GitHub</a>
+      </nav>
     </div>
-    <form id="composer">
-      <label for="input" class="sr-only">Your message</label>
-      <textarea id="input" rows="1" placeholder="Ask about tests, prices, preparation &mdash; or book a collection" autocomplete="off"></textarea>
-      <button type="submit" id="send" aria-label="Send message" title="Send">
+  </aside>
+
+  <div class="chat">
+    <header class="chat-head">
+      <button type="button" class="rail-toggle" id="railToggle" aria-label="Show information panel">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 19V5M12 5l-6 6M12 5l6 6" fill="none" stroke="currentColor"
-                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button>
-    </form>
-    <p class="disclaimer">
-      An AI assistant. It answers only from the laboratory&rsquo;s own documents.
-      For anything urgent, call (503) 555-0142.
-      <br>
-      <span class="note">Demo &mdash; appointments are clash-checked and confirmed against an
-      in-memory calendar, not a real diary. No OAuth token is deployed to a public URL by design.</span>
-    </p>
+      <div class="who">
+        <h1>Assistant</h1>
+        <p>Hawthorne &middot; Beaverton &middot; Gresham &middot; (503) 555-0142</p>
+      </div>
+      <div class="spacer"></div>
+      <button type="button" class="ghost" id="reset">New conversation</button>
+    </header>
+
+    <main class="transcript" id="transcript" aria-live="polite" aria-label="Conversation"></main>
+
+    <div class="composer">
+      <form id="composer">
+        <label for="input" class="sr-only">Your message</label>
+        <textarea id="input" rows="1" placeholder="Message the assistant&hellip;" autocomplete="off"></textarea>
+        <button type="submit" id="send" aria-label="Send message" title="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 19V5M12 5l-6 6M12 5l6 6" fill="none" stroke="currentColor"
+                  stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </form>
+      <p class="disclaimer">
+        An AI assistant. It answers only from the laboratory&rsquo;s own documents,
+        and will not interpret a result. For anything urgent, call (503) 555-0142.
+      </p>
+    </div>
   </div>
 
 </div>
+<div class="rail-scrim" id="railScrim" hidden></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

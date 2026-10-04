@@ -10,13 +10,18 @@
 <div class="report">
 
   <header>
-    <div class="mark" aria-hidden="true">R</div>
-    <div>
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" focusable="false">
+        <rect width="32" height="32" rx="9" fill="currentColor"/>
+        <path d="M16 6.5c3.9 4.8 6.1 8.1 6.1 10.8a6.1 6.1 0 0 1-12.2 0c0-2.7 2.2-6 6.1-10.8z" fill="#fff"/>
+      </svg>
+    </span>
+    <div class="who">
       <h1>Assistant activity</h1>
-      <p id="window">last 30 days</p>
+      <p id="window">activity over the last 30 days</p>
     </div>
     <div class="spacer"></div>
-    <a class="status" href="/">&larr; Back to chat</a>
+    <a class="ghost" href="/">&larr; Back to chat</a>
   </header>
 
   <div id="body"></div>
@@ -43,7 +48,8 @@ function bars(counts, total) {
 }
 
 function render(d) {
-  document.getElementById('window').textContent = `last ${d.window_days} days`;
+  document.getElementById('window').textContent =
+    `activity over the last ${d.window_days} days`;
 
   if (!d.turns) {
     document.getElementById('body').innerHTML =
@@ -99,9 +105,30 @@ function render(d) {
 }
 
 fetch('/api/analytics')
-  .then((r) => r.json())
-  .then(render)
+  .then((r) => {
+    if (r.status === 401) {
+      document.getElementById('window').textContent = 'staff only';
+      document.getElementById('body').innerHTML =
+        `<div class="panel"><h2>Sign in to see this</h2>
+         <p class="note">These figures come from real conversations, so they sit
+         behind the same password as the staff dashboard.</p>
+         <p><a href="/admin">Open the staff dashboard &rarr;</a></p></div>`;
+      return null;
+    }
+    if (r.status === 503) {
+      document.getElementById('window').textContent = 'unavailable';
+      document.getElementById('body').innerHTML =
+        `<div class="panel"><h2>Not configured</h2>
+         <p class="note">No admin password is set on the server. Set
+         <code>ADMIN_PASSWORD</code> and restart.</p></div>`;
+      return null;
+    }
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  })
+  .then((d) => { if (d) render(d); })
   .catch(() => {
+    document.getElementById('window').textContent = '';
     document.getElementById('body').innerHTML =
       `<div class="panel"><h2>Could not load analytics</h2>
        <p class="note">Is the server running?</p></div>`;

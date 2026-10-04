@@ -44,22 +44,45 @@ async function api(path, options) {
 function showGate() { gate.hidden = false; app.hidden = true; }
 function showApp() { gate.hidden = true; app.hidden = false; }
 
+/* Signing in does NOT go through `api()`. There, a 401 means the session
+   expired and "Signed out." is the right thing to say; here it means the
+   password was wrong, and reporting that as "Signed out." sent someone
+   hunting for a configuration problem that did not exist. */
+const LOGIN_ERRORS = {
+  401: 'That password was not recognised.',
+  429: 'Too many attempts. Wait a minute and try again.',
+  503: 'No admin password is configured on the server. Set ADMIN_PASSWORD and restart.',
+};
+
 document.getElementById('loginForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const error = document.getElementById('loginError');
+  const field = document.getElementById('password');
   error.hidden = true;
+
+  let response;
   try {
-    await api('/api/admin/login', {
+    response = await fetch('/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: document.getElementById('password').value }),
+      body: JSON.stringify({ password: field.value }),
     });
+  } catch {
+    error.textContent = 'Could not reach the server.';
+    error.hidden = false;
+    return;
+  }
+
+  if (response.ok) {
+    field.value = '';
     showApp();
     render('overview');
-  } catch (e) {
-    error.textContent = e.message;
-    error.hidden = false;
+    return;
   }
+
+  error.textContent = LOGIN_ERRORS[response.status] || `Sign in failed (${response.status}).`;
+  error.hidden = false;
+  field.select();
 });
 
 document.getElementById('signOut').addEventListener('click', async () => {
