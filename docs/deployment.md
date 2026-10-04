@@ -150,7 +150,7 @@ deployable directly:
 ```yaml
 ---
 title: AI Knowledge Assistant
-emoji: 🦷
+emoji: 🔬
 colorFrom: green
 colorTo: blue
 sdk: docker

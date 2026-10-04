@@ -27,7 +27,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Riverbend Diagnostics — Assistant",
-    page_icon="🦷",
+    page_icon="🔬",
     layout="centered",
 )
 
@@ -160,9 +160,12 @@ def main() -> None:
             "(https://github.com/suleman2808/ai-knowledge-assistant)"
         )
         st.info(
-            "Bookings here use an in-memory calendar — the Google Calendar "
-            "token is deliberately not committed, so a deployed instance "
-            "cannot write to a real diary.",
+            "**Bookings are held in memory here.** A public demo with no "
+            "login should not have write access to anyone's Google "
+            "account, so no OAuth token is deployed. The calendar is a "
+            "swappable backend: clone the repo, authorise once, and the "
+            "same code writes to a real diary. In production this would "
+            "be a service account for the business calendar.",
             icon="📅",
         )
         st.warning(

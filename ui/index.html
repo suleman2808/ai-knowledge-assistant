@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Riverbend Diagnostics — Assistant</title>
 <link rel="stylesheet" href="/static/styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230f5c63'/><text y='68' x='50' text-anchor='middle' font-size='52' font-family='sans-serif' fill='white'>R</text></svg>">
@@ -12,7 +13,7 @@
 
   <header>
     <div class="mark" aria-hidden="true">R</div>
-    <div>
+    <div class="who">
       <h1>Riverbend Diagnostics</h1>
       <p>Hawthorne &middot; Beaverton &middot; Gresham &middot; (503) 555-0142</p>
     </div>
@@ -32,13 +33,21 @@
       <button type="button">When will my report be ready?</button>
     </div>
     <form id="composer">
-      <label for="input" class="sr-only" hidden>Your message</label>
+      <label for="input" class="sr-only">Your message</label>
       <textarea id="input" rows="1" placeholder="Ask about tests, prices, preparation &mdash; or book a collection" autocomplete="off"></textarea>
-      <button type="submit" id="send">Send</button>
+      <button type="submit" id="send" aria-label="Send message" title="Send">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 19V5M12 5l-6 6M12 5l6 6" fill="none" stroke="currentColor"
+                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </form>
     <p class="disclaimer">
       An AI assistant. It answers only from the laboratory&rsquo;s own documents.
       For anything urgent, call (503) 555-0142.
+      <br>
+      <span class="note">Demo &mdash; appointments are clash-checked and confirmed against an
+      in-memory calendar, not a real diary. No OAuth token is deployed to a public URL by design.</span>
     </p>
   </div>
 

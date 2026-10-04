@@ -1,6 +1,6 @@
 ---
 title: AI Knowledge Assistant
-emoji: 🦷
+emoji: 🔬
 colorFrom: green
 colorTo: blue
 sdk: docker
@@ -27,6 +27,17 @@ bad?" — and watch it refuse that too, because the laboratory's own
 policy says staff do not interpret results. That is the difference
 between a chatbot and something a healthcare business could put in front
 of patients.
+
+> **About the live demo:** appointments are accepted, clash-checked and
+> confirmed against an **in-memory** calendar rather than a real one. That
+> is a deliberate boundary, not a missing feature. A public URL with no
+> login must not hold write access to anybody's Google account, and the
+> correct production answer is a **service account for the business's own
+> calendar** — not one developer's OAuth token pasted into a host's
+> secrets. So the calendar is a swappable backend with a real
+> implementation (`app/integrations/google_calendar.py`, tested across a
+> DST boundary) and an in-memory one. Clone it, run
+> `python -m scripts.google_auth`, and the same code books for real.
 
 A customer-facing assistant for a service business, built around one
 constraint: **it must not make things up about the business.** The demo
