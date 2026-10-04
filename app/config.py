@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     # place that converts to and from absolute time.
     clinic_timezone: str = "America/Los_Angeles"
 
+    # --- Admin dashboard ---------------------------------------------------
+    # The dashboard shows transcripts, names, phone numbers and
+    # complaints. With no password set it refuses to serve at all, rather
+    # than opening to anyone who finds the URL.
+    admin_password: str = ""
+
     # --- Server ----------------------------------------------------------
     app_host: str = "127.0.0.1"
     app_port: int = 8000

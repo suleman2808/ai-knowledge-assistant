@@ -26,7 +26,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Any, Iterator
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -335,9 +335,132 @@ def chat_stream(payload: ChatRequest, request: Request) -> Any:
     )
 
 
-@app.get("/api/analytics", tags=["operations"])
+# --------------------------------------------------------------------------
+# Admin dashboard
+# --------------------------------------------------------------------------
+
+
+def require_admin(request: Request) -> None:
+    """Reject anything that is not a logged-in admin session.
+
+    A dependency rather than middleware so each protected route says so
+    in its own signature, and an unprotected one is visible by the
+    absence of it.
+    """
+    from app import admin_auth
+
+    if not admin_auth.is_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="The dashboard is not configured. Set ADMIN_PASSWORD and restart.",
+        )
+    if not admin_auth.is_valid_session(request.cookies.get(admin_auth.COOKIE_NAME)):
+        raise HTTPException(status_code=401, detail="Please sign in.")
+
+
+@app.post("/api/admin/login", tags=["admin"])
+def admin_login(payload: dict, response: Response, request: Request) -> Any:
+    """Exchange the password for a session cookie."""
+    from app import admin_auth
+
+    if not admin_auth.is_enabled():
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "The dashboard is not configured on this server."},
+        )
+
+    # A login endpoint is the one place worth rate limiting hardest: it
+    # is the only one where guessing repeatedly gains anything.
+    if _rate_limited(f"login:{_client_key(request)}"):
+        return JSONResponse(
+            status_code=429, content={"detail": "Too many attempts. Wait a minute."}
+        )
+
+    if not admin_auth.check_password(str(payload.get("password", ""))):
+        logger.warning("Failed admin login from %s", _client_key(request))
+        return JSONResponse(status_code=401, content={"detail": "Incorrect password."})
+
+    response.set_cookie(
+        admin_auth.COOKIE_NAME,
+        admin_auth.issue_session(),
+        max_age=admin_auth.SESSION_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+    return {"ok": True}
+
+
+@app.post("/api/admin/logout", tags=["admin"])
+def admin_logout(response: Response) -> Any:
+    from app import admin_auth
+
+    response.delete_cookie(admin_auth.COOKIE_NAME)
+    return {"ok": True}
+
+
+@app.get("/api/admin/session", tags=["admin"])
+def admin_session(request: Request) -> Any:
+    """Whether the caller is signed in. Used by the page on load."""
+    from app import admin_auth
+
+    return {
+        "configured": admin_auth.is_enabled(),
+        "signed_in": admin_auth.is_valid_session(
+            request.cookies.get(admin_auth.COOKIE_NAME)
+        ),
+    }
+
+
+@app.get("/api/admin/conversations", tags=["admin"], dependencies=[Depends(require_admin)])
+def admin_conversations(limit: int = 50) -> Any:
+    from app.integrations.analytics import conversations
+
+    return conversations(limit=max(1, min(limit, 200)))
+
+
+@app.get(
+    "/api/admin/conversations/{session_id}",
+    tags=["admin"],
+    dependencies=[Depends(require_admin)],
+)
+def admin_conversation(session_id: str) -> Any:
+    """One conversation, every turn, with the sections behind each answer."""
+    from app.integrations.analytics import conversation
+
+    turns = conversation(session_id)
+    if not turns:
+        raise HTTPException(status_code=404, detail="No such conversation.")
+    return turns
+
+
+@app.get("/api/admin/bookings", tags=["admin"], dependencies=[Depends(require_admin)])
+def admin_bookings(limit: int = 100) -> Any:
+    from app.integrations.analytics import bookings
+
+    return bookings(limit=max(1, min(limit, 500)))
+
+
+@app.get("/api/admin/complaints", tags=["admin"], dependencies=[Depends(require_admin)])
+def admin_complaints(limit: int = 100) -> Any:
+    from app.integrations.analytics import complaints
+
+    return complaints(limit=max(1, min(limit, 500)))
+
+
+@app.get("/api/admin/customers", tags=["admin"], dependencies=[Depends(require_admin)])
+def admin_customers(limit: int = 100) -> Any:
+    from app.integrations.analytics import customers
+
+    return customers(limit=max(1, min(limit, 500)))
+
+
+@app.get("/api/analytics", tags=["admin"], dependencies=[Depends(require_admin)])
 def analytics(days: int = 30) -> Any:
-    """Summarise what patients asked and how well it went."""
+    """Summarise what patients asked and how well it went.
+
+    Behind the dashboard password: the knowledge-gap list is a verbatim
+    record of what customers asked, which is not public information.
+    """
     from app.integrations.analytics import summary
 
     return summary(days=max(1, min(days, 365)))
@@ -353,6 +476,11 @@ if UI_DIR.is_dir():
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(UI_DIR / "index.html")
+
+    @app.get("/admin", include_in_schema=False)
+    def admin_page() -> FileResponse:
+        """The dashboard shell. Everything inside it requires a session."""
+        return FileResponse(UI_DIR / "admin.html")
 
     @app.get("/analytics", include_in_schema=False)
     def analytics_page() -> FileResponse:

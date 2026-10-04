@@ -1,0 +1,78 @@
+/* Dashboard-specific styles. Shares the palette in styles.css so the
+   staff view and the customer view read as one product. */
+
+.gate { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
+.gate-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 30px 28px; width: 100%; max-width: 340px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.gate-card h1 { font-size: 19px; margin: 10px 0 0; }
+.gate-card label { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.gate-card input {
+  font: inherit; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg);
+}
+.gate-card input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+.gate-card button {
+  margin-top: 10px; border: 0; border-radius: 10px; cursor: pointer;
+  background: var(--brand); color: #fff; font: inherit; font-weight: 560;
+  padding: 11px;
+}
+.muted { color: var(--muted); font-size: 13px; margin: 0; }
+
+.admin-head {
+  display: flex; align-items: center; gap: 12px;
+  max-width: 1080px; margin: 0 auto; padding: 22px 16px 14px;
+}
+.admin-head h1 { font-size: 17px; margin: 0; }
+.admin-head .spacer { flex: 1; }
+button.status { cursor: pointer; font: inherit; }
+
+.tabs {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  max-width: 1080px; margin: 0 auto; padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  border: 0; background: none; cursor: pointer; font: inherit;
+  padding: 9px 14px; color: var(--muted); border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tabs button.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 560; }
+
+main { max-width: 1080px; margin: 0 auto; padding: 20px 16px 60px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--muted); font-weight: 600;
+  padding: 8px 10px; border-bottom: 1px solid var(--line);
+}
+td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: var(--brand-soft); }
+.empty { color: var(--muted); padding: 30px 0; text-align: center; }
+
+.pill {
+  display: inline-block; border-radius: 999px; padding: 2px 9px;
+  font-size: 11.5px; font-weight: 560; background: var(--brand-soft); color: var(--brand);
+}
+.pill.warn { background: var(--amber-soft); color: var(--amber); }
+.pill.bad  { background: #fdecea; color: #8d2f22; }
+.pill.grey { background: var(--bg); color: var(--muted); }
+
+/* Transcript with the retrieval trace */
+.turn { border: 1px solid var(--line); border-radius: var(--radius); margin: 12px 0;
+        background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.turn .q { padding: 12px 15px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.turn .a { padding: 12px 15px; }
+.turn .trace { padding: 11px 15px; border-top: 1px dashed var(--line); font-size: 13px; }
+.turn .trace h4 { margin: 0 0 7px; font-size: 12px; text-transform: uppercase;
+                  letter-spacing: .4px; color: var(--muted); font-weight: 600; }
+.trace ol { margin: 0; padding-left: 18px; }
+.trace li { margin: 3px 0; color: var(--muted); }
+.trace .crumb { color: var(--ink); }
+.back { background: none; border: 0; color: var(--brand); cursor: pointer;
+        font: inherit; padding: 0; margin-bottom: 12px; }

@@ -516,3 +516,103 @@ def summary(*, days: int = 30, path: Path | None = None) -> dict[str, Any]:
             "p95": percentile(latencies, 0.95),
         },
     }
+
+
+# --------------------------------------------------------------------------
+# Reading: what the admin dashboard shows
+# --------------------------------------------------------------------------
+
+
+def conversations(*, limit: int = 50, path: Path | None = None) -> list[dict[str, Any]]:
+    """One row per conversation, newest first.
+
+    Grouped by session rather than listing turns, because a reviewer
+    thinks in conversations: who asked what and how it went, not a flat
+    stream of messages.
+    """
+    with connect(path) as c:
+        rows = c.execute(
+            """
+            SELECT
+                session_id,
+                COUNT(*)                                       AS turns,
+                MIN(created_at)                                AS started_at,
+                MAX(created_at)                                AS ended_at,
+                SUM(booked)                                    AS bookings,
+                SUM(escalated)                                 AS escalations,
+                SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END)   AS failures,
+                SUM(CASE WHEN grounded = 0 THEN 1 ELSE 0 END)  AS declined,
+                GROUP_CONCAT(DISTINCT intent)                  AS intents,
+                MAX(latency_ms)                                AS slowest_ms
+            FROM turns
+            WHERE session_id != ''
+            GROUP BY session_id
+            ORDER BY started_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    return [
+        {**dict(r), "intents": sorted((r["intents"] or "").split(","))} for r in rows
+    ]
+
+
+def conversation(session_id: str, *, path: Path | None = None) -> list[dict[str, Any]]:
+    """Every turn of one conversation, with its retrieval trace.
+
+    This is the view that makes a grounded answer auditable: alongside
+    what was said sits the list of document sections it was drawn from,
+    and the query that was actually searched — which differs from the
+    message once a follow-up has been rewritten.
+    """
+    with connect(path) as c:
+        rows = c.execute(
+            "SELECT * FROM turns WHERE session_id = ? ORDER BY id",
+            (session_id,),
+        ).fetchall()
+
+    turns = []
+    for row in rows:
+        turn = dict(row)
+        try:
+            turn["sources"] = json.loads(turn.get("sources") or "[]")
+        except json.JSONDecodeError:
+            turn["sources"] = []
+        turn["grounded"] = None if turn["grounded"] is None else bool(turn["grounded"])
+        turns.append(turn)
+    return turns
+
+
+def bookings(*, limit: int = 100, path: Path | None = None) -> list[dict[str, Any]]:
+    """Appointments created by the assistant, soonest first."""
+    with connect(path) as c:
+        rows = c.execute(
+            "SELECT * FROM bookings ORDER BY starts_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def complaints(*, limit: int = 100, path: Path | None = None) -> list[dict[str, Any]]:
+    """Logged complaints, newest first, escalated ones marked."""
+    with connect(path) as c:
+        rows = c.execute(
+            "SELECT * FROM complaints ORDER BY received_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [
+        {
+            **dict(r),
+            "escalated": bool(r["escalated"]),
+            "escalation_reasons": json.loads(r["escalation_reasons"] or "[]"),
+        }
+        for r in rows
+    ]
+
+
+def customers(*, limit: int = 100, path: Path | None = None) -> list[dict[str, Any]]:
+    """Returning customers, most recently seen first."""
+    with connect(path) as c:
+        rows = c.execute(
+            "SELECT * FROM patients ORDER BY last_seen DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]

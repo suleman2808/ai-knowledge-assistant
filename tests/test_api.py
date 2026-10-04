@@ -263,16 +263,43 @@ def test_health_never_fails_even_when_dependencies_do(
     assert body["checks"]["knowledge_base"]["ready"] is False
 
 
-def test_analytics_endpoint_returns_the_summary() -> None:
+def test_analytics_is_no_longer_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    """It was public until the dashboard existed.
+
+    The knowledge-gap list is a verbatim record of what customers asked,
+    which is not public information, so it moved behind the password with
+    the rest of the dashboard.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "admin_password", "a password")
+
     with TestClient(app) as client:
+        assert client.get("/api/analytics?days=7").status_code == 401
+
+
+def test_analytics_returns_the_summary_to_an_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "admin_password", "a password")
+
+    with TestClient(app) as client:
+        client.post("/api/admin/login", json={"password": "a password"})
         body = client.get("/api/analytics?days=7").json()
 
     assert body["window_days"] == 7
     assert "knowledge_gaps" in body
 
 
-def test_analytics_window_is_clamped() -> None:
+def test_analytics_window_is_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "admin_password", "a password")
+
     with TestClient(app) as client:
+        client.post("/api/admin/login", json={"password": "a password"})
         assert client.get("/api/analytics?days=99999").json()["window_days"] == 365
         assert client.get("/api/analytics?days=-5").json()["window_days"] == 1
 

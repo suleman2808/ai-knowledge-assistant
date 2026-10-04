@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Riverbend Dental Care</title>
+<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+
+<div id="gate" class="gate" hidden>
+  <form class="gate-card" id="loginForm">
+    <div class="mark" aria-hidden="true">R</div>
+    <h1>Staff dashboard</h1>
+    <p class="muted">Conversations, bookings and complaints.</p>
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+    <p class="error" id="loginError" hidden></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="admin-head">
+    <div class="mark" aria-hidden="true">R</div>
+    <div>
+      <h1>Staff dashboard</h1>
+      <p class="muted" id="subtitle">Riverbend Dental Care</p>
+    </div>
+    <div class="spacer"></div>
+    <a class="status" href="/">Chat</a>
+    <button class="status" id="signOut" type="button">Sign out</button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="overview" class="active">Overview</button>
+    <button data-view="conversations">Conversations</button>
+    <button data-view="bookings">Bookings</button>
+    <button data-view="complaints">Complaints</button>
+    <button data-view="customers">Customers</button>
+  </nav>
+
+  <main id="view"></main>
+</div>
+
+<script src="/static/admin.js"></script>
+</body>
+</html>
