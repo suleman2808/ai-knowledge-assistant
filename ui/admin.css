@@ -124,7 +124,10 @@
 
 .gate-card .mark { width: 38px; height: 38px; color: var(--brand); }
 .gate-card .mark svg { width: 100%; height: 100%; display: block; }
-.gate-card h1 { font-size: 20px; margin: 18px 0 0; font-weight: 600; }
+.gate-card h1 {
+  font-family: var(--display); font-size: 26px; font-weight: 400;
+  margin: 16px 0 0; letter-spacing: -.01em;
+}
 .gate-card .muted { margin: 5px 0 0; }
 
 .field { margin-top: 24px; }
@@ -173,20 +176,56 @@
 
 /* ---------- chrome ---------- */
 
+/*
+ * The dashboard keeps the gate's atmosphere, turned down: the same two
+ * washes, dimmer and slower, with the content on frosted panels above
+ * them. Someone who has just signed in should feel they walked further
+ * into the same building, not through a door into a spreadsheet.
+ */
+
+#app { position: relative; isolation: isolate; min-height: 100dvh; }
+
+.ambient {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(44% 40% at 18% 0%, var(--wash-a) 0%, transparent 66%),
+    radial-gradient(40% 36% at 88% 8%, var(--wash-b) 0%, transparent 70%),
+    radial-gradient(50% 44% at 54% 104%, var(--wash-c) 0%, transparent 68%);
+  filter: blur(84px);
+  opacity: .9;
+}
+
+/* The figures sit near the top, so the wash is pulled away from them —
+   a number is not decoration and should not compete with any. */
+.ambient::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(70% 54% at 50% 32%, var(--gate-bg) 0%, transparent 78%);
+  opacity: .42;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ambient { animation: drift-a 58s ease-in-out infinite alternate; }
+}
+
+body:has(#app:not([hidden])) { background: var(--gate-bg); }
+
 .admin-head {
   display: flex; align-items: center; gap: 12px;
-  max-width: 1120px; margin: 0 auto; padding: 20px 24px 16px;
+  max-width: 1120px; margin: 0 auto; padding: 22px 24px 18px;
 }
-.admin-head .mark { flex: 0 0 32px; width: 32px; height: 32px; color: var(--brand); }
+.admin-head .mark { flex: 0 0 34px; width: 34px; height: 34px; color: var(--brand); }
 .admin-head .mark svg { width: 100%; height: 100%; display: block; }
-.admin-head h1 { font-size: 15.5px; margin: 0; font-weight: 600; }
+.admin-head h1 {
+  font-family: var(--display); font-size: 22px; font-weight: 400;
+  margin: 0; letter-spacing: -.01em; line-height: 1.15;
+}
 .admin-head .who .muted { font-size: 12px; color: var(--faint); }
 .admin-head .spacer { flex: 1; }
 
 .tabs {
   display: flex; gap: 2px; flex-wrap: wrap;
   max-width: 1120px; margin: 0 auto; padding: 0 24px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--glass-line);
 }
 .tabs button {
   border: 0; background: none; cursor: pointer; font: inherit;
@@ -198,7 +237,19 @@
 .tabs button:hover { color: var(--ink); }
 .tabs button.active { color: var(--brand-ink); border-bottom-color: var(--brand); font-weight: 500; }
 
-main { max-width: 1120px; margin: 0 auto; padding: 22px 24px 64px; }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 24px 72px; }
+
+/* Everything the dashboard draws sits on the same frosted surface. */
+.card, .panel, table, .turn, .empty {
+  background: var(--glass);
+  border-color: var(--glass-line);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .panel, table, .turn, .empty { background: var(--surface); }
+}
 
 /* ---------- tables ---------- */
 
@@ -211,12 +262,12 @@ table {
 th {
   text-align: left; font-size: 11px; text-transform: uppercase;
   letter-spacing: .06em; color: var(--faint); font-weight: 600;
-  padding: 10px 14px; background: var(--raised);
-  border-bottom: 1px solid var(--line);
+  padding: 11px 14px; background: var(--field);
+  border-bottom: 1px solid var(--glass-line);
   white-space: nowrap;
 }
 td {
-  padding: 11px 14px; border-bottom: 1px solid var(--line-soft);
+  padding: 12px 14px; border-bottom: 1px solid var(--glass-line);
   vertical-align: top;
 }
 tr:last-child td { border-bottom: 0; }
@@ -247,13 +298,13 @@ td time, .num-cell { font-variant-numeric: tabular-nums; }
   background: var(--surface); box-shadow: var(--shadow); overflow: hidden;
 }
 .turn .q {
-  padding: 13px 16px; border-bottom: 1px solid var(--line-soft);
-  background: var(--raised); font-weight: 500;
+  padding: 14px 17px; border-bottom: 1px solid var(--glass-line);
+  background: var(--field); font-weight: 500;
 }
 .turn .a { padding: 14px 16px; line-height: 1.6; }
 .turn .trace {
-  padding: 12px 16px; border-top: 1px dashed var(--line);
-  font-size: 12.5px; background: var(--bg);
+  padding: 13px 17px; border-top: 1px dashed var(--glass-line);
+  font-size: 12.5px; background: var(--field);
 }
 .turn .trace h4 {
   margin: 0 0 8px; font-size: 11px; text-transform: uppercase;
