@@ -35,6 +35,7 @@ paying interest.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -46,6 +47,16 @@ from app.graph.router import classify, select_agent
 from app.graph.state import AssistantState, new_state
 
 logger = logging.getLogger(__name__)
+
+# Words that commonly surround a phone number when someone is simply
+# identifying themselves, and carry no request of their own.
+PLEASANTRIES_AROUND_A_NUMBER = frozenset(
+    """
+    hi hello hey this is my number its it's i'm im here thanks thank you
+    please mobile cell phone and the me a on at speaking calling again back
+    """.split()
+)
+
 
 GREETING = (
     "Hello — I'm the assistant for Riverbend Dental Care. I can answer "
@@ -193,6 +204,22 @@ def other_node(state: AssistantState) -> dict[str, Any]:
         if kind == "greeting" and patient and patient.get("name"):
             first_name = patient["name"].split()[0]
             answer = f"Welcome back, {first_name} — " + GREETING[len("Hello — "):]
+    elif patient and _is_mostly_contact_details(state.get("message", "")):
+        # Someone handing over their number is identifying themselves, not
+        # asking about something off-topic. Answering "that's outside what
+        # I can help with" to "hi, this is 503-555-0180" is the worst
+        # possible reply: they have just told us who they are.
+        kind = "identified"
+        first_name = (patient.get("name") or "").split()
+        greeting = f"Thanks, {first_name[0]} — " if first_name else "Thanks — "
+        previous = patient.get("visit_count") or 0
+        seen = (
+            f"good to see you again. I have {previous} previous booking"
+            f"{'s' if previous != 1 else ''} on file. "
+            if previous
+            else "I've found your details. "
+        )
+        answer = f"{greeting}{seen}What can I help with today?"
     else:
         # Classified as `other` by the model: a real message about
         # something the clinic does not do.
@@ -211,6 +238,31 @@ def other_node(state: AssistantState) -> dict[str, Any]:
             "recognised": bool(patient),
         },
     }
+
+
+def _is_mostly_contact_details(message: str) -> bool:
+    """Whether a message is someone giving their number and little else.
+
+    "hi, this is 503-555-0180" qualifies; "my number is 503-555-0180, and
+    what time does the cinema open?" does not — that still deserves the
+    out-of-scope answer. The test is whether anything substantial remains
+    once the number and the usual pleasantries are taken out.
+
+    Word matching rather than pattern substitution, deliberately: an
+    earlier version built the patterns by string interpolation and wrote
+    literal control characters into the file instead of word boundaries,
+    so nothing was ever removed and the check silently always failed.
+    """
+    from app.integrations.phone import PHONE_IN_TEXT
+
+    if not PHONE_IN_TEXT.search(message or ""):
+        return False
+
+    remainder = PHONE_IN_TEXT.sub(" ", message or "").lower()
+    words = re.findall(r"[a-z']+", remainder)
+    substantial = [w for w in words if w not in PLEASANTRIES_AROUND_A_NUMBER]
+    return sum(len(w) for w in substantial) <= 3
+
 
 
 def finalise(state: AssistantState) -> dict[str, Any]:

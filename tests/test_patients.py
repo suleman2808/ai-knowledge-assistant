@@ -186,3 +186,61 @@ def test_what_the_customer_types_now_beats_the_record(
 
     assert "Imran Khalid" in response.answer
     assert "Sarah Chen" not in response.answer
+
+
+# ---------------------------------------------------------------------------
+# Someone identifying themselves
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("hi, this is (503) 555 0180", True),
+        ("my number is 503-555-0180", True),
+        ("503-555-0180", True),
+        ("+1 503 555 0180 thanks", True),
+        # Still a real question, and still out of scope.
+        ("my number is 503-555-0180, what time does the cinema open?", False),
+        # A request with a number attached is not an introduction.
+        ("book a test, 503-555-0180", False),
+        ("hello there", False),
+    ],
+)
+def test_identifying_yourself_is_told_apart_from_asking_something(
+    message: str, expected: bool
+) -> None:
+    from app.graph.build import _is_mostly_contact_details
+
+    assert _is_mostly_contact_details(message) is expected
+
+
+def test_a_recognised_customer_giving_their_number_is_welcomed() -> None:
+    """Found by using it: "hi, this is 503-555-0180" was answered with
+    "that's outside what I can help with" — to someone who had just said
+    who they are."""
+    from app.graph.build import other_node
+
+    result = other_node(
+        {
+            "message": "hi, this is 503-555-0180",
+            "routed_by": "llm",
+            "routing_reason": "shares contact details",
+            "patient": {"name": "Sarah Chen", "visit_count": 2, "bookings": []},
+        }
+    )
+
+    assert "Sarah" in result["answer"]
+    assert "outside what I can help with" not in result["answer"]
+    assert result["agent_metadata"]["kind"] == "identified"
+
+
+def test_an_unrecognised_number_is_not_pretended_to_be_known() -> None:
+    from app.graph.build import other_node
+
+    result = other_node(
+        {"message": "hi, this is 503-555-7777", "routed_by": "llm",
+         "routing_reason": "shares contact details", "patient": None}
+    )
+
+    assert result["agent_metadata"]["kind"] == "out_of_scope"
