@@ -5,6 +5,7 @@ Each test runs against its own temporary SQLite file (see conftest.py).
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 
@@ -286,3 +287,165 @@ def test_graph_run_can_skip_logging() -> None:
     build_module.run("hi", log=False)
 
     assert summary()["turns"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Retrieval trace, bookings and returning customers
+# ---------------------------------------------------------------------------
+
+
+def booked_turn(**overrides) -> dict:  # noqa: ANN003
+    """A turn representing a completed booking."""
+    base = turn(
+        intent="booking",
+        message="book a cleaning next Tuesday at 2pm",
+        answer="You're booked in, Sarah Chen — cleaning on Tuesday at 2:00 PM.",
+        agent_metadata={
+            "stage": "booked",
+            "event_id": "evt-123",
+            "start": "2026-10-06T14:00:00",
+            "end": "2026-10-06T14:40:00",
+            "calendar_backend": "google",
+            "extracted": {
+                "service": "cleaning",
+                "patient_name": "Sarah Chen",
+                "phone": "503-555-0180",
+                "notes": "anxious patient",
+            },
+        },
+    )
+    base.update(overrides)
+    return base
+
+
+def test_answer_and_sources_are_stored() -> None:
+    """The dashboard's retrieval trace depends on these being kept."""
+    log_turn(
+        turn(
+            answer="A root canal on a molar costs $1,250.",
+            sources=[{"breadcrumb": "Services > Restorative", "source": "s.md",
+                      "score": 0.62}],
+            agent_metadata={"grounded": True, "search_query": "price of a root canal"},
+        )
+    )
+
+    with connect() as c:
+        row = c.execute("SELECT answer, sources, search_query FROM turns").fetchone()
+
+    assert row["answer"].startswith("A root canal")
+    assert json.loads(row["sources"])[0]["breadcrumb"] == "Services > Restorative"
+    assert row["search_query"] == "price of a root canal"
+
+
+def test_a_completed_booking_is_recorded() -> None:
+    log_turn(booked_turn())
+
+    with connect() as c:
+        row = c.execute("SELECT * FROM bookings").fetchone()
+
+    assert row["patient_name"] == "Sarah Chen"
+    assert row["phone"] == "503-555-0180"
+    assert row["service"] == "cleaning"
+    assert row["event_id"] == "evt-123"
+    assert row["starts_at"] == "2026-10-06T14:00:00"
+    assert row["calendar_backend"] == "google"
+
+
+def test_a_booking_keeps_contact_details_that_turns_redact() -> None:
+    """The two tables hold deliberately different things.
+
+    Analytics needs what was asked, not who asked. A booking needs the
+    opposite, or nobody can be told their appointment moved.
+    """
+    log_turn(booked_turn())
+
+    with connect() as c:
+        stored_message = c.execute("SELECT message FROM turns").fetchone()[0]
+        stored_phone = c.execute("SELECT phone FROM bookings").fetchone()[0]
+
+    assert "[phone]" not in stored_phone
+    assert stored_phone == "503-555-0180"
+    assert "503-555-0180" not in stored_message
+
+
+def test_only_booked_turns_create_a_booking() -> None:
+    log_turn(turn(intent="booking", agent_metadata={"stage": "collecting_details"}))
+    log_turn(turn(intent="inquiry"))
+
+    with connect() as c:
+        assert c.execute("SELECT COUNT(*) FROM bookings").fetchone()[0] == 0
+
+
+def test_a_returning_customer_is_recognised_by_phone() -> None:
+    log_turn(booked_turn())
+    log_turn(booked_turn())
+
+    with connect() as c:
+        row = c.execute("SELECT * FROM patients").fetchone()
+        count = c.execute("SELECT COUNT(*) FROM patients").fetchone()[0]
+
+    assert count == 1, "the same number must not create a second customer"
+    assert row["visit_count"] == 2
+    assert row["name"] == "Sarah Chen"
+
+
+def test_a_later_booking_without_a_name_does_not_erase_the_name() -> None:
+    log_turn(booked_turn())
+
+    anonymous = booked_turn()
+    anonymous["agent_metadata"]["extracted"]["patient_name"] = ""
+    log_turn(anonymous)
+
+    with connect() as c:
+        assert c.execute("SELECT name FROM patients").fetchone()[0] == "Sarah Chen"
+
+
+def test_first_seen_is_preserved_across_visits() -> None:
+    log_turn(booked_turn())
+    with connect() as c:
+        first = c.execute("SELECT first_seen FROM patients").fetchone()[0]
+
+    log_turn(booked_turn())
+    with connect() as c:
+        row = c.execute("SELECT first_seen, last_seen FROM patients").fetchone()
+
+    assert row["first_seen"] == first
+
+
+def test_a_booking_without_a_phone_creates_no_customer() -> None:
+    anonymous = booked_turn()
+    anonymous["agent_metadata"]["extracted"]["phone"] = ""
+    log_turn(anonymous)
+
+    with connect() as c:
+        assert c.execute("SELECT COUNT(*) FROM bookings").fetchone()[0] == 1
+        assert c.execute("SELECT COUNT(*) FROM patients").fetchone()[0] == 0
+
+
+def test_an_older_database_gains_the_new_columns() -> None:
+    """A database created before these columns existed must keep working.
+
+    CREATE TABLE IF NOT EXISTS silently does nothing to an existing table,
+    so without a migration the insert would fail on every turn.
+    """
+    legacy = db_path()
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(legacy) as raw:
+        raw.execute(
+            """
+            CREATE TABLE turns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL, session_id TEXT, message TEXT NOT NULL,
+                intent TEXT NOT NULL, secondary_intent TEXT, confidence REAL,
+                routed_by TEXT, success INTEGER, grounded INTEGER,
+                retrieval_status TEXT, best_score REAL, needs_followup INTEGER,
+                escalated INTEGER, booked INTEGER, latency_ms INTEGER,
+                error_kind TEXT
+            )
+            """
+        )
+
+    assert log_turn(turn(answer="still works")) is True
+
+    with connect() as c:
+        assert c.execute("SELECT answer FROM turns").fetchone()[0] == "still works"

@@ -77,7 +77,16 @@ CREATE TABLE IF NOT EXISTS turns (
     escalated         INTEGER NOT NULL DEFAULT 0,
     booked            INTEGER NOT NULL DEFAULT 0,
     latency_ms        INTEGER NOT NULL DEFAULT 0,
-    error_kind        TEXT
+    error_kind        TEXT,
+    -- The answer and the sections it came from. Without these the
+    -- dashboard can report that a question was answered but not what was
+    -- said or on what basis, which is the only part worth auditing.
+    answer            TEXT    NOT NULL DEFAULT '',
+    sources           TEXT    NOT NULL DEFAULT '[]',
+    -- What was actually searched: differs from the message when a
+    -- follow-up has been rewritten into a standalone question.
+    search_query      TEXT,
+    agent             TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_turns_created ON turns (created_at);
@@ -95,7 +104,57 @@ CREATE TABLE IF NOT EXISTS complaints (
 );
 
 CREATE INDEX IF NOT EXISTS idx_complaints_received ON complaints (received_at);
+
+-- Appointments the Booking Agent actually created. Separate from `turns`
+-- because a booking is a business record with a life of its own: staff
+-- look it up, it is reconciled against the calendar, and it outlives the
+-- conversation that produced it.
+--
+-- Unlike `turns`, this stores a name and phone number in the clear. That
+-- is deliberate: an appointment nobody can be contacted about is not an
+-- appointment. Both this table and `patients` are only reachable through
+-- the password-protected dashboard.
+CREATE TABLE IF NOT EXISTS bookings (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at        TEXT    NOT NULL,
+    session_id        TEXT    NOT NULL DEFAULT '',
+    event_id          TEXT    NOT NULL DEFAULT '',
+    patient_name      TEXT    NOT NULL DEFAULT '',
+    phone             TEXT    NOT NULL DEFAULT '',
+    service           TEXT    NOT NULL DEFAULT '',
+    starts_at         TEXT    NOT NULL DEFAULT '',
+    ends_at           TEXT    NOT NULL DEFAULT '',
+    calendar_backend  TEXT    NOT NULL DEFAULT '',
+    notes             TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_starts ON bookings (starts_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_phone  ON bookings (phone);
+
+-- Returning customers, recognised by phone number rather than a login.
+-- A phone number is the one identifier someone will always give you and
+-- never forget, which is why this is how clinics and labs actually
+-- identify people.
+CREATE TABLE IF NOT EXISTS patients (
+    phone        TEXT PRIMARY KEY,
+    name         TEXT    NOT NULL DEFAULT '',
+    first_seen   TEXT    NOT NULL,
+    last_seen    TEXT    NOT NULL,
+    visit_count  INTEGER NOT NULL DEFAULT 0
+);
 """
+
+# Columns added after the first version shipped. CREATE TABLE IF NOT
+# EXISTS will not add a column to a table that already exists, so an
+# existing database needs them applied explicitly.
+MIGRATIONS: dict[str, list[tuple[str, str]]] = {
+    "turns": [
+        ("answer", "TEXT NOT NULL DEFAULT ''"),
+        ("sources", "TEXT NOT NULL DEFAULT '[]'"),
+        ("search_query", "TEXT"),
+        ("agent", "TEXT NOT NULL DEFAULT ''"),
+    ],
+}
 
 
 def redact(text: str) -> str:
@@ -106,6 +165,16 @@ def redact(text: str) -> str:
 
 def db_path() -> Path:
     return settings.abs_path(settings.analytics_db)
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """Add any columns missing from an older database."""
+    for table, columns in MIGRATIONS.items():
+        existing = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        for name, definition in columns:
+            if name not in existing:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+                logger.info("Added column %s.%s", table, name)
 
 
 @contextmanager
@@ -125,6 +194,7 @@ def connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
         # written, instead of one blocking the other.
         connection.execute("PRAGMA journal_mode=WAL")
         connection.executescript(SCHEMA)
+        _migrate(connection)
         yield connection
         connection.commit()
     finally:
@@ -167,6 +237,10 @@ def log_turn(turn: dict[str, Any], *, latency_ms: int = 0, path: Path | None = N
         "booked": int(meta.get("stage") == "booked"),
         "latency_ms": int(latency_ms),
         "error_kind": meta.get("error_kind"),
+        "answer": str(turn.get("answer") or ""),
+        "sources": json.dumps(turn.get("sources") or []),
+        "search_query": meta.get("search_query"),
+        "agent": str(turn.get("intent") or ""),
     }
 
     try:
@@ -174,11 +248,66 @@ def log_turn(turn: dict[str, Any], *, latency_ms: int = 0, path: Path | None = N
             columns = ", ".join(row)
             placeholders = ", ".join(f":{k}" for k in row)
             connection.execute(f"INSERT INTO turns ({columns}) VALUES ({placeholders})", row)
+            if meta.get("stage") == "booked":
+                _record_booking(connection, turn, meta)
         return True
     except Exception as exc:
         logger.error("Analytics write failed (turn still served): %s", exc)
         return False
 
+
+def _record_booking(
+    connection: sqlite3.Connection, turn: dict[str, Any], meta: dict[str, Any]
+) -> None:
+    """Store a confirmed appointment, and remember who made it.
+
+    Called inside `log_turn`'s transaction, so a booking and the turn that
+    produced it are written together or not at all.
+    """
+    extracted = meta.get("extracted") or {}
+    name = str(extracted.get("patient_name") or "").strip()
+    phone = str(extracted.get("phone") or "").strip()
+    now = datetime.now().isoformat(timespec="seconds")
+
+    connection.execute(
+        """
+        INSERT INTO bookings
+            (created_at, session_id, event_id, patient_name, phone, service,
+             starts_at, ends_at, calendar_backend, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            now,
+            str(turn.get("session_id") or ""),
+            str(meta.get("event_id") or ""),
+            name,
+            phone,
+            str(extracted.get("service") or ""),
+            str(meta.get("start") or ""),
+            str(meta.get("end") or ""),
+            str(meta.get("calendar_backend") or ""),
+            str(extracted.get("notes") or ""),
+        ),
+    )
+
+    if not phone:
+        return
+
+    # Upsert the customer. `first_seen` is preserved, `last_seen` moves,
+    # and an existing name is only replaced when a new one was actually
+    # given — a later booking made without a name must not erase it.
+    connection.execute(
+        """
+        INSERT INTO patients (phone, name, first_seen, last_seen, visit_count)
+        VALUES (?, ?, ?, ?, 1)
+        ON CONFLICT(phone) DO UPDATE SET
+            name        = CASE WHEN excluded.name != '' THEN excluded.name
+                               ELSE patients.name END,
+            last_seen   = excluded.last_seen,
+            visit_count = patients.visit_count + 1
+        """,
+        (phone, name, now, now),
+    )
 
 # --------------------------------------------------------------------------
 # Complaint store, SQLite-backed
