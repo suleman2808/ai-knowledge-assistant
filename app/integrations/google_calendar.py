@@ -296,10 +296,24 @@ class GoogleCalendar:
             },
         }
 
+        # Adding the clinic as an attendee is what makes Google send a
+        # confirmation email, immediately, with the appointment attached.
+        # There is no "send an email" call in the Calendar API — this is
+        # the mechanism.
+        notify = bool(settings.clinic_email)
+        if notify:
+            body["attendees"] = [{"email": settings.clinic_email}]
+
         try:
             created = (
                 self._service.events()
-                .insert(calendarId=self._calendar_id, body=body)
+                .insert(
+                    calendarId=self._calendar_id,
+                    body=body,
+                    # Without this Google creates the event silently and
+                    # nobody hears about it. "all" means every attendee.
+                    sendUpdates="all" if notify else "none",
+                )
                 .execute()
             )
         except Exception as exc:
@@ -318,6 +332,7 @@ class GoogleCalendar:
             patient_name=patient_name,
             phone=phone,
             notes=notes,
+            notified=notify,
         )
 
     def check(self) -> dict[str, Any]:

@@ -577,3 +577,41 @@ def test_real_calendar_booking_keeps_the_clinic_policy(
     response = handle_booking("book it", backend=RealishCalendar(appointments=[]))
 
     assert "reminder" in response.answer.lower()
+
+
+def test_the_reply_only_claims_an_email_that_was_actually_sent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Three different endings, each true of the booking it describes."""
+
+    class NotifyingCalendar(InMemoryCalendar):
+        name = "google"
+
+        def create_appointment(self, slot, **kwargs):  # noqa: ANN001, ANN003
+            appointment = super().create_appointment(slot, **kwargs)
+            appointment.notified = True
+            return appointment
+
+    class SilentCalendar(InMemoryCalendar):
+        name = "google"
+
+    target = next_weekday(1)
+    payload = {
+        "service": "cleaning", "date": target.isoformat(), "date_phrase": None,
+        "time": "14:00", "time_preference": None, "patient_name": "Sarah Chen",
+        "phone": "503-555-0180", "notes": None,
+    }
+
+    stub_extraction(monkeypatch, payload)
+    notified = handle_booking("book it", backend=NotifyingCalendar(appointments=[]))
+    assert "emailed to the clinic" in notified.answer
+
+    stub_extraction(monkeypatch, payload)
+    silent = handle_booking("book it", backend=SilentCalendar(appointments=[]))
+    assert "emailed" not in silent.answer
+    assert "reminder" in silent.answer
+
+    stub_extraction(monkeypatch, payload)
+    demo = handle_booking("book it", backend=InMemoryCalendar(appointments=[]))
+    assert "demonstration" in demo.answer
+    assert "emailed" not in demo.answer

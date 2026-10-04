@@ -250,6 +250,12 @@ def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> Ag
             "rather than written to the clinic's diary, and no reminder is "
             "sent. Against a connected calendar it would be a real booking."
         )
+    elif appointment.notified:
+        closing = (
+            "A confirmation has been emailed to the clinic. We'll send a "
+            "reminder three days before, and again on the morning. If you "
+            "need to change it, we ask for 48 hours' notice."
+        )
     else:
         closing = (
             "We'll send a reminder three days before, and again on the "
@@ -269,6 +275,7 @@ def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> Ag
             "start": appointment.start.isoformat(),
             "end": appointment.end.isoformat(),
             "calendar_backend": backend_name,
+            "notified": appointment.notified,
             "extracted": extracted,
         },
     )

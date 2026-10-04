@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     google_credentials_file: Path = Path("credentials.json")
     google_token_file: Path = Path("token.json")
     google_calendar_id: str = "primary"
+    # Where booking confirmations are sent. Added to the event as an
+    # attendee, which makes Google email an invitation immediately.
+    #
+    # It must be a different address from the account that owns the
+    # calendar: Google does not email you an invitation to your own
+    # event, so setting this to the calendar owner produces no email and
+    # no error. Empty disables confirmations entirely.
+    clinic_email: str = ""
     # The clinic's local time. All naive datetimes in the booking code are
     # wall-clock times in this zone; the Google integration is the only
     # place that converts to and from absolute time.

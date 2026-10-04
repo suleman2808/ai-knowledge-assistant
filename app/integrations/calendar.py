@@ -107,6 +107,9 @@ class Appointment:
     patient_name: str = ""
     phone: str = ""
     notes: str = ""
+    notified: bool = False
+    """True when a confirmation was actually emailed, so the reply can say
+    so without guessing. The in-memory calendar never notifies anyone."""
 
 
 @runtime_checkable

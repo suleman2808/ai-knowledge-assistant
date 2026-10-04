@@ -47,8 +47,10 @@ class FakeEvents:
         self.list_kwargs = kwargs
         return FakeExecutable({"items": self.items}, self.error)
 
-    def insert(self, *, calendarId, body):  # noqa: ANN001, N803, ANN201
-        self.inserted.append({"calendarId": calendarId, "body": body})
+    def insert(self, *, calendarId, body, sendUpdates="none"):  # noqa: ANN001, N803, ANN201
+        self.inserted.append(
+            {"calendarId": calendarId, "body": body, "sendUpdates": sendUpdates}
+        )
         return FakeExecutable({"id": "evt-created"}, self.error)
 
 
@@ -249,7 +251,7 @@ def test_write_failure_becomes_a_calendar_error() -> None:
         def events(self):  # noqa: ANN201
             events = super().events()
 
-            def _insert(*, calendarId, body):  # noqa: ANN001, N803, ANN202
+            def _insert(*, calendarId, body, sendUpdates="none"):  # noqa: ANN001, N803, ANN202
                 return FakeExecutable(None, RuntimeError("quota exceeded"))
 
             events.insert = _insert  # type: ignore[method-assign]
@@ -312,3 +314,44 @@ def test_get_calendar_falls_back_when_google_is_unavailable(
 
     assert backend.name == "in_memory"
     calendar_module.reset_calendar(None)
+
+
+# ---------------------------------------------------------------------------
+# Confirmation emails
+# ---------------------------------------------------------------------------
+
+
+def test_a_confirmation_is_emailed_when_a_recipient_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """There is no "send an email" call in the Calendar API. Adding an
+    attendee and asking Google to notify them is the mechanism."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "clinic_email", "bookings@riverbend.example")
+    calendar = make_calendar([])
+
+    appointment = calendar.create_appointment(
+        slot_at(14), summary="Full blood count", patient_name="Sarah Chen"
+    )
+
+    sent = calendar._service.events().inserted[0]
+    assert sent["body"]["attendees"] == [{"email": "bookings@riverbend.example"}]
+    assert sent["sendUpdates"] == "all", "without this Google creates it silently"
+    assert appointment.notified is True
+
+
+def test_no_recipient_means_no_notification(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "clinic_email", "")
+    calendar = make_calendar([])
+
+    appointment = calendar.create_appointment(
+        slot_at(14), summary="Full blood count", patient_name="Sarah Chen"
+    )
+
+    sent = calendar._service.events().inserted[0]
+    assert "attendees" not in sent["body"]
+    assert sent["sendUpdates"] == "none"
+    assert appointment.notified is False
