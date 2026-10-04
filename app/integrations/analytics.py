@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from app.config import settings
+from app.integrations.phone import normalise as normalise_phone
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,11 @@ CREATE TABLE IF NOT EXISTS bookings (
     session_id        TEXT    NOT NULL DEFAULT '',
     event_id          TEXT    NOT NULL DEFAULT '',
     patient_name      TEXT    NOT NULL DEFAULT '',
+    -- The number as the customer typed it, for display, and a normalised
+    -- key for matching. Without the key, "(503) 555 0180" and
+    -- "503-555-0180" are two different people.
     phone             TEXT    NOT NULL DEFAULT '',
+    phone_key         TEXT    NOT NULL DEFAULT '',
     service           TEXT    NOT NULL DEFAULT '',
     starts_at         TEXT    NOT NULL DEFAULT '',
     ends_at           TEXT    NOT NULL DEFAULT '',
@@ -129,7 +134,7 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookings_starts ON bookings (starts_at);
-CREATE INDEX IF NOT EXISTS idx_bookings_phone  ON bookings (phone);
+CREATE INDEX IF NOT EXISTS idx_bookings_phone  ON bookings (phone_key);
 
 -- Returning customers, recognised by phone number rather than a login.
 -- A phone number is the one identifier someone will always give you and
@@ -148,6 +153,9 @@ CREATE TABLE IF NOT EXISTS patients (
 # EXISTS will not add a column to a table that already exists, so an
 # existing database needs them applied explicitly.
 MIGRATIONS: dict[str, list[tuple[str, str]]] = {
+    "bookings": [
+        ("phone_key", "TEXT NOT NULL DEFAULT ''"),
+    ],
     "turns": [
         ("answer", "TEXT NOT NULL DEFAULT ''"),
         ("sources", "TEXT NOT NULL DEFAULT '[]'"),
@@ -267,14 +275,15 @@ def _record_booking(
     extracted = meta.get("extracted") or {}
     name = str(extracted.get("patient_name") or "").strip()
     phone = str(extracted.get("phone") or "").strip()
+    key = normalise_phone(phone)
     now = datetime.now().isoformat(timespec="seconds")
 
     connection.execute(
         """
         INSERT INTO bookings
-            (created_at, session_id, event_id, patient_name, phone, service,
-             starts_at, ends_at, calendar_backend, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (created_at, session_id, event_id, patient_name, phone, phone_key,
+             service, starts_at, ends_at, calendar_backend, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             now,
@@ -282,6 +291,7 @@ def _record_booking(
             str(meta.get("event_id") or ""),
             name,
             phone,
+            key or "",
             str(extracted.get("service") or ""),
             str(meta.get("start") or ""),
             str(meta.get("end") or ""),
@@ -290,7 +300,7 @@ def _record_booking(
         ),
     )
 
-    if not phone:
+    if not key:
         return
 
     # Upsert the customer. `first_seen` is preserved, `last_seen` moves,
@@ -306,7 +316,7 @@ def _record_booking(
             last_seen   = excluded.last_seen,
             visit_count = patients.visit_count + 1
         """,
-        (phone, name, now, now),
+        (key, name, now, now),
     )
 
 # --------------------------------------------------------------------------

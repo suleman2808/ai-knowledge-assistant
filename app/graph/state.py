@@ -40,6 +40,11 @@ class AssistantState(TypedDict, total=False):
     session_id: str
     """Groups turns into a conversation, for analytics."""
 
+    # --- Written by the identify node -------------------------------------
+    patient: dict[str, Any] | None
+    """The returning customer this conversation belongs to, if a phone
+    number in it matched one we have seen before. None for a stranger."""
+
     # --- Written by the router -------------------------------------------
     intent: Intent
     """Where this message was dispatched."""

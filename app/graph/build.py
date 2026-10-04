@@ -101,11 +101,51 @@ def _apply(state: AssistantState, response: AgentResponse) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+def identify(state: AssistantState) -> dict[str, Any]:
+    """Recognise a returning customer from a phone number in the conversation.
+
+    Runs before the router and costs nothing: a regular expression and one
+    indexed lookup, no model call. Everything downstream can then assume
+    `state["patient"]` is either a known customer or None.
+
+    The whole conversation is searched, not just the latest message,
+    because someone gives their number once and expects to be known for
+    the rest of the exchange — not only in the turn where they typed it.
+    """
+    from app.integrations.patients import find, phone_in
+
+    message = state.get("message", "")
+    key = phone_in(message)
+
+    if not key:
+        for turn in reversed(state.get("history") or []):
+            if turn.get("role") != "user":
+                continue
+            key = phone_in(turn.get("content", ""))
+            if key:
+                break
+
+    if not key:
+        return {"patient": None}
+
+    patient = find(key)
+    if patient:
+        logger.info(
+            "Recognised returning customer (%d previous booking(s))",
+            patient["visit_count"],
+        )
+    return {"patient": patient}
+
+
 def booking_node(state: AssistantState) -> dict[str, Any]:
     """Run the Booking Agent."""
     return _apply(
         state,
-        handle_booking(state["message"], history=state.get("history")),
+        handle_booking(
+            state["message"],
+            history=state.get("history"),
+            patient=state.get("patient"),
+        ),
     )
 
 
@@ -142,9 +182,17 @@ def other_node(state: AssistantState) -> dict[str, Any]:
     reason = state.get("routing_reason", "")
     routed_by = state.get("routed_by", "")
 
+    patient = state.get("patient")
+
     if routed_by == "keyword":
         kind = "farewell" if ("farewell" in reason or "thanks" in reason) else "greeting"
         answer = FAREWELL if kind == "farewell" else GREETING
+        # Greet a returning customer by name. Only on a greeting: opening
+        # "Welcome back, Sarah" in the middle of a conversation reads as a
+        # glitch rather than a courtesy.
+        if kind == "greeting" and patient and patient.get("name"):
+            first_name = patient["name"].split()[0]
+            answer = f"Welcome back, {first_name} — " + GREETING[len("Hello — "):]
     else:
         # Classified as `other` by the model: a real message about
         # something the clinic does not do.
@@ -156,7 +204,12 @@ def other_node(state: AssistantState) -> dict[str, Any]:
         "sources": [],
         "success": True,
         "needs_followup": False,
-        "agent_metadata": {"handled_by": "other", "kind": kind, "reason": reason},
+        "agent_metadata": {
+            "handled_by": "other",
+            "kind": kind,
+            "reason": reason,
+            "recognised": bool(patient),
+        },
     }
 
 
@@ -184,6 +237,7 @@ def finalise(state: AssistantState) -> dict[str, Any]:
         "confidence": state.get("confidence", 0.0),
         "routed_by": state.get("routed_by", ""),
         "routing_reason": state.get("routing_reason", ""),
+        "patient": state.get("patient"),
         "answer": answer,
         "success": state.get("success", True),
         "needs_followup": state.get("needs_followup", False),
@@ -211,6 +265,7 @@ def build_graph() -> Any:
 
     builder = StateGraph(AssistantState)
 
+    builder.add_node("identify", identify)
     builder.add_node("router", classify)
     builder.add_node("booking", booking_node)
     builder.add_node("inquiry", inquiry_node)
@@ -218,7 +273,8 @@ def build_graph() -> Any:
     builder.add_node("other", other_node)
     builder.add_node("finalise", finalise)
 
-    builder.add_edge(START, "router")
+    builder.add_edge(START, "identify")
+    builder.add_edge("identify", "router")
 
     # The conditional edge is the dispatch. The mapping is explicit rather
     # than relying on the returned string matching a node name by

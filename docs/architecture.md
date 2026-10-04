@@ -12,6 +12,7 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
+	identify(identify)
 	router(router)
 	booking(booking)
 	inquiry(inquiry)
@@ -19,9 +20,10 @@ graph TD;
 	other(other)
 	finalise(finalise)
 	__end__([<p>__end__</p>]):::last
-	__start__ --> router;
+	__start__ --> identify;
 	booking --> finalise;
 	complaint --> finalise;
+	identify --> router;
 	inquiry --> finalise;
 	other --> finalise;
 	router -.-> booking;

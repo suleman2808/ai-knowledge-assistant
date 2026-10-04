@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime, timedelta
+from typing import Any
 
 from app.agents.base import AgentResponse, failure
 from app.agents.dates import resolve as resolve_relative_date
@@ -278,6 +279,7 @@ def handle_booking(
     *,
     history: list[dict[str, str]] | None = None,
     backend: CalendarBackend | None = None,
+    patient: dict[str, Any] | None = None,
 ) -> AgentResponse:
     """Handle an appointment request.
 
@@ -285,6 +287,9 @@ def handle_booking(
         message: The patient's message, verbatim.
         history: Prior turns, so details given earlier are not re-asked.
         backend: Calendar to book against. Injectable for tests.
+        patient: A recognised returning customer, from the identify node.
+            Their name and number fill the gaps so the assistant stops
+            asking for details it already holds.
 
     Returns:
         An `AgentResponse`. `needs_followup` is True whenever the agent
@@ -327,6 +332,19 @@ def handle_booking(
     preference = extracted.get("time_preference")
     name = (extracted.get("patient_name") or "").strip() or None
     phone = _clean_phone(extracted.get("phone"))
+
+    # A returning customer has already told us these things. Asking again
+    # is the single most irritating thing a booking system does, and the
+    # answer is on file. What they typed this time still wins: people do
+    # book on behalf of someone else.
+    recognised_fields: list[str] = []
+    if patient:
+        if not name and patient.get("name"):
+            name = patient["name"]
+            recognised_fields.append("patient_name")
+        if not phone and patient.get("phone"):
+            phone = patient["phone"]
+            recognised_fields.append("phone")
     notes = (extracted.get("notes") or "").strip()
 
     # Normalise what the model returned before deciding what is missing,
@@ -341,6 +359,7 @@ def handle_booking(
         "patient_name": name,
         "phone": phone,
         "notes": notes or None,
+        "from_customer_record": recognised_fields or None,
     }
 
     missing = [
