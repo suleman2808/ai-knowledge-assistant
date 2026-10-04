@@ -85,6 +85,83 @@ function addMessage(who, html) {
   return bubble;
 }
 
+/**
+ * Reveal streamed text at a readable pace.
+ *
+ * The tokens are real — the server streams them as the model writes —
+ * but Groq finishes a short answer in about a fifth of a second, which
+ * arrives as a wall of text indistinguishable from no streaming at all.
+ * So the characters are buffered and released on animation frames.
+ *
+ * The rate is proportional to what is waiting, which keeps two
+ * properties that a fixed delay would not: a long answer never crawls,
+ * and the reveal always finishes promptly after the last token rather
+ * than running on after the model has stopped.
+ */
+function createTypewriter(element, onSettled) {
+  let full = '';
+  let shown = 0;
+  let frame = null;
+  let finishing = false;
+
+  function paint() {
+    frame = null;
+    const remaining = full.length - shown;
+    if (remaining > 0) {
+      // Pacing is for someone watching. A hidden tab gets the text
+      // immediately: nobody is reading it, and animation frames do not
+      // run there, so pacing it would mean never finishing at all.
+      shown = document.hidden
+        ? full.length
+        // A proportion of the backlog rather than a fixed rate, so the
+        // reveal takes about a second whether the answer is two lines or
+        // twenty, and never crawls behind a long one. The minimum keeps
+        // the last few characters from taking a frame each.
+        : shown + Math.max(2, Math.ceil(remaining / 25));
+      element.innerHTML = renderMarkdown(full.slice(0, shown));
+      transcript.scrollTop = transcript.scrollHeight;
+    }
+    if (shown < full.length) {
+      schedule();
+    } else if (finishing) {
+      onSettled();
+    }
+  }
+
+  /* Animation frames stop in a hidden tab, so a timer takes over there.
+     Without this a reader who switches away mid-answer comes back to a
+     half-written reply and a disabled composer. */
+  function schedule() {
+    if (frame !== null) return;
+    frame = document.hidden
+      ? setTimeout(paint, 0)
+      : requestAnimationFrame(paint);
+  }
+
+  return {
+    push(text) { full += text; schedule(); },
+    reset() { full = ''; shown = 0; element.innerHTML = PROGRESS; },
+    /** Stop pacing and hand over, once what has arrived has been shown. */
+    settle() {
+      finishing = true;
+      if (shown >= full.length) onSettled(); else schedule();
+    },
+    /** Abandon the reveal — the caller is taking the element over. */
+    stop() {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+        clearTimeout(frame);
+      }
+      frame = null;
+    },
+  };
+}
+
+const PROGRESS = `
+  <div class="stages"><span class="stage">
+    <span class="spin"></span><span id="stageText">Working out what you need</span>
+  </span></div>`;
+
 const STAGE_LABELS = {
   router: 'Working out what you need',
   inquiry: 'Searching the laboratory’s documents',
@@ -176,10 +253,11 @@ async function send(message) {
   input.style.height = 'auto';
   setBusy(true);
 
-  const pending = addMessage('assistant', `
-    <div class="stages"><span class="stage">
-      <span class="spin"></span><span id="stageText">Working out what you need</span>
-    </span></div>`);
+  const pending = addMessage('assistant', PROGRESS);
+  let finished = null;
+  const typing = createTypewriter(pending, () => {
+    if (finished) finished();
+  });
 
   try {
     const response = await fetch('/api/chat/stream', {
@@ -196,9 +274,9 @@ async function send(message) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let finished = false;
+    let completed = false;
 
-    while (!finished) {
+    while (!completed) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -217,26 +295,44 @@ async function send(message) {
           const label = STAGE_LABELS[event.node];
           const stageText = document.getElementById('stageText');
           if (label && stageText) stageText.textContent = label;
+        } else if (event.event === 'token') {
+          // The first token replaces the progress spinner: once there are
+          // words to read, a label saying what we are doing is noise.
+          typing.push(event.text);
+        } else if (event.event === 'reset') {
+          // The attempt was abandoned and is being retried. Drop what was
+          // shown rather than letting a second attempt append to a first.
+          typing.reset();
         } else if (event.event === 'error') {
           throw new Error(event.detail);
         } else if (event.event === 'done') {
           sessionId = event.session_id || sessionId;
-          pending.innerHTML = renderMarkdown(event.answer);
-          renderMeta(pending, event);
-          finished = true;
+          // Wait for the reveal to catch up, then replace it with the
+          // authoritative answer: a turn can gain a handoff note after
+          // the model stopped, and an agent can discard the model's text
+          // entirely.
+          finished = () => {
+            typing.stop();
+            pending.innerHTML = renderMarkdown(event.answer);
+            renderMeta(pending, event);
+            setBusy(false);
+            transcript.scrollTop = transcript.scrollHeight;
+          };
+          typing.settle();
+          completed = true;
         }
       }
     }
 
-    if (!finished) throw new Error('The connection ended before an answer arrived.');
+    if (!completed) throw new Error('The connection ended before an answer arrived.');
   } catch (error) {
+    typing.stop();
     pending.innerHTML = '';
     const box = document.createElement('div');
     box.className = 'error';
     box.textContent = error.message ||
       'Something went wrong. Please try again, or call (503) 555-0142.';
     pending.appendChild(box);
-  } finally {
     setBusy(false);
     transcript.scrollTop = transcript.scrollHeight;
   }

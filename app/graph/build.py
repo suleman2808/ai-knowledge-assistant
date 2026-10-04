@@ -35,10 +35,13 @@ paying interest.
 from __future__ import annotations
 
 import logging
+import queue
 import re
+import threading
 import time
 from typing import Any
 
+from app import llm
 from app.agents.base import AgentResponse
 from app.agents.booking import handle_booking
 from app.agents.complaint import handle_complaint
@@ -59,18 +62,18 @@ PLEASANTRIES_AROUND_A_NUMBER = frozenset(
 
 
 GREETING = (
-    "Hello — I'm the assistant for Riverbend Diagnostics. I can answer "
+    "Hello - I'm the assistant for Riverbend Diagnostics. I can answer "
     "questions about our services, prices, hours and policies, book you an "
     "appointment, or pass on a complaint. What can I help with?"
 )
 
 FAREWELL = (
-    "You're welcome — take care. If you need anything else, just ask, or "
+    "You're welcome - take care. If you need anything else, just ask, or "
     "call the laboratory on (503) 555-0142."
 )
 
 OUT_OF_SCOPE = (
-    "That's outside what I can help with, I'm afraid — I only handle things "
+    "That's outside what I can help with, I'm afraid - I only handle things "
     "to do with Riverbend Diagnostics. I can answer questions about our "
     "services, prices, hours and policies, book an appointment, or pass on a "
     "complaint."
@@ -82,7 +85,7 @@ OUT_OF_SCOPE = (
 HANDOFF_NOTES = {
     "complaint": (
         "\n\nYou also mentioned something that went wrong. I haven't logged "
-        "that as a complaint yet — say the word and I will, or I can pass it "
+        "that as a complaint yet - say the word and I will, or I can pass it "
         "to our practice manager."
     ),
     "booking": (
@@ -90,7 +93,7 @@ HANDOFF_NOTES = {
         "when, and I'll get that booked."
     ),
     "inquiry": (
-        "\n\nYou asked something else in there too — ask me again on its own "
+        "\n\nYou asked something else in there too - ask me again on its own "
         "and I'll answer it properly."
     ),
 }
@@ -203,7 +206,7 @@ def other_node(state: AssistantState) -> dict[str, Any]:
         # glitch rather than a courtesy.
         if kind == "greeting" and patient and patient.get("name"):
             first_name = patient["name"].split()[0]
-            answer = f"Welcome back, {first_name} — " + GREETING[len("Hello — "):]
+            answer = f"Welcome back, {first_name} - " + GREETING[len("Hello - "):]
     elif patient and _is_mostly_contact_details(state.get("message", "")):
         # Someone handing over their number is identifying themselves, not
         # asking about something off-topic. Answering "that's outside what
@@ -211,7 +214,7 @@ def other_node(state: AssistantState) -> dict[str, Any]:
         # possible reply: they have just told us who they are.
         kind = "identified"
         first_name = (patient.get("name") or "").split()
-        greeting = f"Thanks, {first_name[0]} — " if first_name else "Thanks — "
+        greeting = f"Thanks, {first_name[0]} - " if first_name else "Thanks - "
         previous = patient.get("visit_count") or 0
         seen = (
             f"good to see you again. I have {previous} previous booking"
@@ -404,35 +407,72 @@ def stream(
     session_id: str = "",
     log: bool = True,
 ) -> Any:
-    """Run a turn, yielding progress as each node completes.
+    """Run a turn, yielding progress and the answer as it is written.
 
-    The agents' own LLM calls are not streamed, so there are no tokens to
-    emit. What the graph *can* report is which node is running, and that
-    turns out to be the more useful signal anyway: "routing", then
-    "searching the laboratory's documents", then an answer. A five-second
-    wait with visible progress reads as work; the same wait with a blank
-    screen reads as broken.
+    Two kinds of event come out of here. Node events say which stage is
+    running — routing, then searching, then writing — which is what fills
+    the seconds before any text exists. Token events carry the answer
+    itself, a few characters at a time, for the agents that produce prose
+    a reader sees verbatim.
+
+    The graph runs on a worker thread. It has to: tokens arrive *during* a
+    node, and a generator that is itself driving the graph cannot yield
+    anything until that node returns. The thread pushes events onto a
+    queue and this generator drains it, so the first characters reach the
+    browser while the model is still writing the rest.
 
     Yields:
-        `{"event": "node", ...}` per completed node, then one
-        `{"event": "done", "turn": {...}}`.
+        `{"event": "node", ...}` and `{"event": "token", "text": ...}`,
+        then one `{"event": "done", "turn": {...}}`.
     """
     started = time.perf_counter()
-    final: dict[str, Any] = {}
+    events: queue.Queue[dict[str, Any] | None] = queue.Queue()
+    outcome: dict[str, Any] = {}
 
-    for update in get_graph().stream(
-        new_state(message, history=history, session_id=session_id),
-        stream_mode="updates",
-    ):
-        for node, delta in update.items():
-            delta = delta or {}
-            final.update(delta)
-            event = {"event": "node", "node": node}
-            for key in ("intent", "secondary_intent", "confidence", "routed_by"):
-                if key in delta:
-                    event[key] = delta[key]
-            yield event
+    def on_token(piece: str | None) -> None:
+        # None means the attempt was abandoned mid-reply and is about to
+        # be retried, so whatever the reader has seen is wrong.
+        events.put({"event": "reset"} if piece is None else
+                   {"event": "token", "text": piece})
 
+    def work() -> None:
+        final: dict[str, Any] = {}
+        try:
+            with llm.token_sink(on_token):
+                for update in get_graph().stream(
+                    new_state(message, history=history, session_id=session_id),
+                    stream_mode="updates",
+                ):
+                    for node, delta in update.items():
+                        delta = delta or {}
+                        final.update(delta)
+                        event = {"event": "node", "node": node}
+                        for key in ("intent", "secondary_intent", "confidence",
+                                    "routed_by"):
+                            if key in delta:
+                                event[key] = delta[key]
+                        events.put(event)
+        except BaseException as exc:  # noqa: BLE001 - re-raised on the caller's thread
+            outcome["error"] = exc
+        else:
+            outcome["final"] = final
+        finally:
+            events.put(None)
+
+    worker = threading.Thread(target=work, name="assistant-turn", daemon=True)
+    worker.start()
+
+    while True:
+        event = events.get()
+        if event is None:
+            break
+        yield event
+
+    worker.join()
+    if "error" in outcome:
+        raise outcome["error"]
+
+    final = outcome.get("final", {})
     latency_ms = int((time.perf_counter() - started) * 1000)
     turn = final.get("turn", {"answer": final.get("answer", ""), "intent": "unknown"})
     turn["latency_ms"] = latency_ms

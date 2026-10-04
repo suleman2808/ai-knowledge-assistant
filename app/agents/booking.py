@@ -207,7 +207,7 @@ def _offer_alternatives(
     if not options:
         return AgentResponse(
             answer=(
-                f"{reason}. I couldn't find anything in the next fortnight either — "
+                f"{reason}. I couldn't find anything in the next fortnight either - "
                 f"please call us on (503) 555-0142 and reception will find you a time."
             ),
             agent=AGENT_NAME,
@@ -270,7 +270,7 @@ def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> Ag
 
     return AgentResponse(
         answer=(
-            f"You're booked in, {appointment.patient_name} — "
+            f"You're booked in, {appointment.patient_name} - "
             f"{appointment.summary.lower()} on {when}. {closing}"
         ),
         agent=AGENT_NAME,
@@ -409,7 +409,7 @@ def handle_booking(
         if not is_open(start):
             return _offer_alternatives(
                 calendar, booking_date, duration,
-                reason=f"I can't book {_format_time(start)} — {closing_reason(start)}",
+                reason=f"I can't book {_format_time(start)} - {closing_reason(start)}",
                 extracted=normalised,
             )
 

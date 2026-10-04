@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 
-from app.agents.base import AgentResponse, failure
+from app.agents.base import AgentResponse, failure, guarded_tokens
 from app.config import settings
 from app.llm import LLMError, complete, complete_verbose
 from app.prompts import render
@@ -43,7 +43,7 @@ INSUFFICIENT = "INSUFFICIENT_CONTEXT"
 # pretend the question was unreasonable.
 NO_ANSWER = (
     "I don't have that in the laboratory's information, so I'd rather not guess. "
-    "Please call us on (503) 555-0142 and the team can answer properly — or "
+    "Please call us on (503) 555-0142 and the team can answer properly - or "
     "ask me something else about our services, hours, policies or treatments."
 )
 
@@ -202,7 +202,14 @@ def answer_inquiry(
     )
 
     try:
-        response = complete_verbose(prompt, system=render("inquiry_system"))
+        # Streamed, so the reader sees the answer being written. The guard
+        # holds the opening characters back until the sentinel is ruled
+        # out: watching INSUFFICIENT_CONTEXT appear and then be replaced
+        # would be worse than a moment's wait.
+        with guarded_tokens(INSUFFICIENT):
+            response = complete_verbose(
+                prompt, system=render("inquiry_system"), stream=True
+            )
     except LLMError as exc:
         logger.error("Inquiry LLM call failed: %s", exc)
         return failure(

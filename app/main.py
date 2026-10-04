@@ -154,7 +154,7 @@ async def lifespan(app: FastAPI):  # noqa: ANN201, ARG001
 
 
 app = FastAPI(
-    title="Riverbend Diagnostics — AI Assistant",
+    title="Riverbend Diagnostics - AI Assistant",
     description=(
         "A RAG assistant with a multi-agent router. An incoming message is "
         "classified and dispatched to a booking, inquiry or complaint "
@@ -274,7 +274,7 @@ def chat(payload: ChatRequest, request: Request) -> Any:
     if _rate_limited(_client_key(request)):
         return JSONResponse(
             status_code=429,
-            content={"detail": "Too many messages just now — please wait a moment."},
+            content={"detail": "Too many messages just now - please wait a moment."},
         )
 
     session_id = payload.session_id or uuid.uuid4().hex[:16]
@@ -289,16 +289,21 @@ def chat(payload: ChatRequest, request: Request) -> Any:
 
 @app.post("/api/chat/stream", tags=["chat"])
 def chat_stream(payload: ChatRequest, request: Request) -> Any:
-    """Answer one message, reporting progress as each node completes.
+    """Answer one message, streaming progress and then the answer itself.
 
-    Server-sent events. The agents' own model calls are not streamed, so
-    there are no tokens to emit; what is emitted is which stage is
-    running. A five-second wait with visible progress reads as work.
+    Server-sent events, in three kinds: `node` for which stage is running,
+    `token` for the answer as it is written, and `done` carrying the
+    finished turn with its sources and metadata.
+
+    The `done` answer is authoritative, not the concatenated tokens. A
+    turn can gain a handoff note after the model has finished, and an
+    agent can discard the model's text entirely — which is exactly what
+    happens when the Inquiry Agent decides an answer was not grounded.
     """
     if _rate_limited(_client_key(request)):
         return JSONResponse(
             status_code=429,
-            content={"detail": "Too many messages just now — please wait a moment."},
+            content={"detail": "Too many messages just now - please wait a moment."},
         )
 
     session_id = payload.session_id or uuid.uuid4().hex[:16]

@@ -16,16 +16,57 @@ us three things:
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import random
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Where streamed tokens go, if anyone is listening.
+#
+# A context variable rather than an argument threaded through every
+# layer: the UI wants tokens from one call deep inside one agent, and
+# plumbing a callback from the HTTP handler through the graph, the node
+# and the agent would put a parameter nobody else uses into six
+# signatures. A ContextVar is per-thread and per-task, so two concurrent
+# requests cannot see each other's tokens.
+_sink: contextvars.ContextVar[Callable[[str], None] | None] = contextvars.ContextVar(
+    "llm_token_sink", default=None
+)
+
+
+@contextmanager
+def token_sink(callback: Callable[[str], None] | None) -> Iterator[None]:
+    """Receive tokens from `complete(..., stream=True)` calls made inside.
+
+    Calls that do not ask to stream are unaffected, which matters: the
+    router, the extractors and the follow-up rewriter all run through
+    this module, and none of their output is meant for a reader.
+    """
+    token = _sink.set(callback)
+    try:
+        yield
+    finally:
+        _sink.reset(token)
+
+
+def streaming() -> bool:
+    """Whether anything is listening for tokens right now."""
+    return _sink.get() is not None
+
+
+def active_sink() -> Callable[[str], None] | None:
+    """The sink currently installed, for wrappers that want to filter it."""
+    return _sink.get()
+
 
 # How many times to retry a call that failed for a transient reason.
 MAX_ATTEMPTS = 3
@@ -127,6 +168,49 @@ def _is_retryable(exc: Exception) -> bool:
     return status is not None and (status == 429 or status >= 500)
 
 
+def _finish_reason(completion: Any) -> str:
+    """Why generation stopped, or "unknown" if the shape is unfamiliar."""
+    try:
+        return getattr(completion.choices[0], "finish_reason", "unknown") or "unknown"
+    except (AttributeError, IndexError):
+        return "unknown"
+
+
+def _consume_stream(client: Any, kwargs: dict[str, Any]) -> tuple[str, Any, Any]:
+    """Read a streamed completion, forwarding each delta to the sink.
+
+    A retry has to be able to start the reply over, so this does not hand
+    the caller a half-written answer: the sink is told to discard what it
+    has by being sent `None` if the stream dies partway. Only `_chat`
+    knows whether another attempt is coming, so only `_chat` decides.
+    """
+    sink = _sink.get()
+    pieces: list[str] = []
+    last_chunk: Any = None
+    usage: Any = None
+
+    try:
+        for chunk in client.chat.completions.create(**kwargs, stream=True):
+            last_chunk = chunk
+            usage = getattr(chunk, "usage", None) or usage
+            try:
+                delta = chunk.choices[0].delta
+            except (AttributeError, IndexError):
+                continue
+            piece = getattr(delta, "content", None)
+            if not piece:
+                continue
+            pieces.append(piece)
+            if sink:
+                sink(piece)
+    except Exception:
+        if sink:
+            sink(None)  # type: ignore[arg-type]
+        raise
+
+    return "".join(pieces).strip(), last_chunk, usage
+
+
 def _chat(
     messages: list[dict[str, str]],
     *,
@@ -135,6 +219,7 @@ def _chat(
     max_tokens: int,
     json_mode: bool,
     reasoning_effort: str | None = None,
+    stream: bool = False,
 ) -> LLMResponse:
     """Send a chat request to the provider, with retries.
 
@@ -165,7 +250,10 @@ def _chat(
         attempts_made = attempt
         started = time.perf_counter()
         try:
-            completion = client.chat.completions.create(**kwargs)
+            if stream:
+                text, completion, usage = _consume_stream(client, kwargs)
+            else:
+                completion = client.chat.completions.create(**kwargs)
         except Exception as exc:  # provider SDKs raise a wide variety of types
             last_error = exc
             if not _is_retryable(exc) or attempt == MAX_ATTEMPTS:
@@ -179,15 +267,16 @@ def _chat(
             continue
 
         latency_ms = int((time.perf_counter() - started) * 1000)
-        usage = getattr(completion, "usage", None)
-        text = (completion.choices[0].message.content or "").strip()
+        if not stream:
+            usage = getattr(completion, "usage", None)
+            text = (completion.choices[0].message.content or "").strip()
 
         if not text:
             # Reasoning models draw hidden reasoning tokens from the same
             # budget as the reply. When max_tokens is too low the request
             # succeeds but returns nothing, which is far more confusing
             # than an error, so we name the actual cause.
-            finish = getattr(completion.choices[0], "finish_reason", "unknown")
+            finish = _finish_reason(completion)
             raise LLMError(
                 f"{model} returned an empty reply (finish_reason={finish}, "
                 f"max_tokens={max_tokens}). For reasoning models this usually "
@@ -223,6 +312,7 @@ def complete(
     temperature: float | None = None,
     max_tokens: int | None = None,
     reasoning_effort: str | None = None,
+    stream: bool = False,
 ) -> str:
     """Return the model's reply to `prompt` as plain text.
 
@@ -237,6 +327,9 @@ def complete(
             this budget on hidden reasoning, so do not set it too low.
         reasoning_effort: "low", "medium" or "high" for models that support
             it. Defaults to the configured value.
+        stream: Forward each token to the active `token_sink` as it
+            arrives. The return value is identical either way, so a caller
+            that streams still gets the whole reply to work with.
 
     Returns:
         The reply text, stripped.
@@ -252,6 +345,7 @@ def complete(
         temperature=temperature,
         max_tokens=max_tokens,
         reasoning_effort=reasoning_effort,
+        stream=stream,
     ).text
 
 
@@ -263,6 +357,7 @@ def complete_verbose(
     temperature: float | None = None,
     max_tokens: int | None = None,
     reasoning_effort: str | None = None,
+    stream: bool = False,
 ) -> LLMResponse:
     """Like `complete()`, but returns latency and token usage too.
 
@@ -281,6 +376,7 @@ def complete_verbose(
         max_tokens=max_tokens or settings.llm_max_tokens,
         json_mode=False,
         reasoning_effort=reasoning_effort or settings.llm_reasoning_effort,
+        stream=stream and streaming(),
     )
 
 

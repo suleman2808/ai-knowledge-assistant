@@ -79,7 +79,7 @@ def describe(patient: dict[str, Any] | None) -> str:
     documents that the answer actually depends on.
     """
     if not patient:
-        return "(not recognised — treat as a new customer)"
+        return "(not recognised - treat as a new customer)"
 
     parts = [f"Name: {patient['name'] or 'unknown'}"]
     parts.append(f"Previous bookings: {patient['visit_count']}")

@@ -18,8 +18,12 @@ Every agent obeys the same two rules:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
+
+from app import llm
 
 
 # Characters models insert that are invisible or near-invisible but that
@@ -33,6 +37,20 @@ _INVISIBLE = {
     "﻿": "",   # byte-order mark
     "‑": "-",  # non-breaking hyphen
     " ": " ",  # non-breaking space
+    " ": " ",  # narrow non-breaking space
+}
+
+# Dashes the model reaches for and this interface does not want. An em
+# dash is correct typography and still the wrong character here: it is
+# indistinguishable from a minus at small sizes, it does not survive
+# every copy-paste, and the house style for these three screens is a
+# plain hyphen. Converted at the same boundary as the invisibles, so it
+# covers model prose as well as the text written in this repository.
+_DASHES = {
+    "—": "-",  # em dash
+    "–": "-",  # en dash
+    "‒": "-",  # figure dash
+    "―": "-",  # horizontal bar
 }
 
 
@@ -43,8 +61,12 @@ def normalise(text: str) -> str:
     soft hyphen instead of a hyphen-minus, so the number looked right on
     screen and broke when copied. Cheap to fix at the boundary, and the
     boundary is the only place that catches every agent.
+
+    Long dashes are folded to hyphens here for the same reason: it is the
+    one place that catches prose the model wrote as well as prose this
+    repository wrote.
     """
-    for character, replacement in _INVISIBLE.items():
+    for character, replacement in {**_INVISIBLE, **_DASHES}.items():
         text = text.replace(character, replacement)
     return text
 
@@ -122,3 +144,78 @@ def failure(agent: str, kind: str, detail: str, **metadata: Any) -> AgentRespons
         success=False,
         metadata={"error_kind": kind, "error_detail": detail, **metadata},
     )
+
+
+# Punctuation a model wraps a bare sentinel in: quotes, emphasis, a full
+# stop, surrounding whitespace.
+_SENTINEL_WRAPPERS = "\"'`*. \n\r\t"
+
+
+def _looks_like(text: str, sentinels: tuple[str, ...]) -> bool:
+    """Whether `text` is starting to spell out one of the sentinels.
+
+    Matches the tolerance of the agents' own checks: a model that wraps
+    the word in quotes, asterisks or a full stop still means it.
+    """
+    probe = text.strip().strip(_SENTINEL_WRAPPERS).upper()
+    return any(probe.startswith(s.upper()) for s in sentinels)
+
+
+@contextmanager
+def guarded_tokens(*sentinels: str) -> Iterator[None]:
+    """Stream tokens to the reader, but hold the first few back.
+
+    An agent can reply with a sentinel instead of prose — the Inquiry
+    Agent answers `INSUFFICIENT_CONTEXT` when the retrieved material does
+    not cover the question, and the code turns that into a decline. If
+    tokens went straight to the screen, the reader would watch the word
+    INSUFFICIENT_CONTEXT appear and then be replaced, which is worse than
+    waiting.
+
+    So nothing is forwarded until enough characters have arrived to rule
+    every sentinel out. That costs the length of the longest sentinel in
+    latency, about twenty characters, and only on the first chunk.
+    """
+    downstream = llm.active_sink()
+    if downstream is None:
+        yield
+        return
+
+    longest = max((len(s) for s in sentinels), default=0)
+    held: list[str] = []
+    state = {"decided": False, "suppress": False}
+
+    def forward(piece: str | None) -> None:
+        # None means the attempt was abandoned; drop whatever was held and
+        # tell the reader to start over.
+        if piece is None:
+            held.clear()
+            state["decided"] = False
+            state["suppress"] = False
+            downstream(None)
+            return
+
+        if state["decided"]:
+            if not state["suppress"]:
+                downstream(piece)
+            return
+
+        held.append(piece)
+        joined = "".join(held)
+        if len(joined.lstrip()) < longest:
+            return
+
+        state["decided"] = True
+        state["suppress"] = _looks_like(joined, sentinels)
+        if not state["suppress"]:
+            downstream(joined)
+
+    with llm.token_sink(forward):
+        yield
+
+    # A reply shorter than the sentinel never reached the length that
+    # triggers a decision, so it is still sitting in the buffer.
+    if not state["decided"] and held:
+        joined = "".join(held)
+        if not _looks_like(joined, sentinels):
+            downstream(joined)

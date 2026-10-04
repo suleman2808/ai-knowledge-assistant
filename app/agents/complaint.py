@@ -49,14 +49,14 @@ VALID_CATEGORIES = (
 # Used when the model's reply cannot be generated. Still gives the patient
 # a reference and a route to a human, which is the part that matters.
 FALLBACK_REPLY = (
-    "Thank you for telling us — I'm sorry this happened. I've logged it as "
+    "Thank you for telling us - I'm sorry this happened. I've logged it as "
     "{reference} and passed it to our practice manager, Fiona Adeyemi, who "
     "will look into it. You can reach her on (503) 555-0142 or at "
     "fiona@riverbenddiagnostics.example."
 )
 
 NOT_A_COMPLAINT = (
-    "Thank you — I've passed that on to the team, they'll be glad to hear it. "
+    "Thank you - I've passed that on to the team, they'll be glad to hear it. "
     "Is there anything else I can help you with?"
 )
 
@@ -143,7 +143,7 @@ def _persist(store: Any, record: "ComplaintRecord") -> bool:
         return True
     except Exception as exc:
         logger.error(
-            "COMPLAINT NOT PERSISTED — held in memory only. ref=%s error=%s",
+            "COMPLAINT NOT PERSISTED - held in memory only. ref=%s error=%s",
             record.reference, exc,
         )
         _fallback.record(record)
@@ -307,6 +307,7 @@ def handle_complaint(
     stored = _persist(log, record)
 
     try:
+        # The reply is used verbatim, so it can stream straight through.
         reply = complete(
             render(
                 "complaint_reply",
@@ -315,7 +316,8 @@ def handle_complaint(
                 severity=assessment["severity"],
                 reference=reference,
                 escalated="yes" if escalated else "no",
-            )
+            ),
+            stream=True,
         )
     except LLMError as exc:
         logger.error("Complaint reply generation failed: %s", exc)

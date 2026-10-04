@@ -267,7 +267,7 @@ class GoogleCalendar:
             description_lines.append(f"Notes: {notes}")
 
         body = {
-            "summary": f"{summary} — {patient_name}" if patient_name else summary,
+            "summary": f"{summary} - {patient_name}" if patient_name else summary,
             "description": "\n".join(description_lines),
             "start": {
                 "dateTime": to_rfc3339(slot.start),
