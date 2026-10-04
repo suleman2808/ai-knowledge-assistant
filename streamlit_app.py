@@ -37,6 +37,7 @@ st.set_page_config(
 
 _SETTINGS_FROM_SECRETS = (
     "GROQ_API_KEY",
+    "ADMIN_PASSWORD",
     "LLM_MODEL",
     "ROUTER_MODEL",
     "RETRIEVAL_MODE",
