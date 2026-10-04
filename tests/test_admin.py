@@ -251,3 +251,37 @@ def test_the_dashboard_page_is_served(client: TestClient) -> None:
     assert page.status_code == 200
     assert "Staff dashboard" in page.text
     assert client.get("/static/admin.js").status_code == 200
+
+
+def test_a_password_that_arrives_after_import_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reported from the live deployment: the dashboard said it was
+    switched off with the secret correctly set.
+
+    `settings` is built once, when `app.config` is first imported. On
+    Streamlit Cloud the secret is copied into the environment by whichever
+    page runs first, and if that page had already imported `app.config`,
+    the password was baked in as empty. The check now reads the
+    environment at call time, so import order cannot decide whether
+    authentication exists.
+    """
+    monkeypatch.setattr(settings, "admin_password", "")
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    assert admin_auth.is_enabled() is False
+
+    monkeypatch.setenv("ADMIN_PASSWORD", "arrived late")
+
+    assert admin_auth.is_enabled() is True
+    assert admin_auth.check_password("arrived late") is True
+    assert admin_auth.check_password("wrong") is False
+
+
+def test_the_environment_wins_over_a_stale_settings_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "admin_password", "stale value")
+    monkeypatch.setenv("ADMIN_PASSWORD", "the real one")
+
+    assert admin_auth.check_password("the real one") is True
+    assert admin_auth.check_password("stale value") is False

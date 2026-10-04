@@ -29,6 +29,7 @@ import base64
 import hashlib
 import hmac
 import logging
+import os
 import time
 
 from app.config import settings
@@ -41,9 +42,26 @@ COOKIE_NAME = "admin_session"
 SESSION_SECONDS = 12 * 60 * 60
 
 
+def password() -> str:
+    """The configured admin password, read late.
+
+    `settings` is built once, the first time `app.config` is imported. On
+    Streamlit Cloud the secrets arrive through `st.secrets` and are copied
+    into the environment by whichever page runs first — and if that page
+    imported `app.config` beforehand, the password was already baked in as
+    empty and no amount of rebooting fixes it on its own.
+
+    So the environment is consulted at call time, and `settings` is the
+    fallback rather than the source. Reading a password late costs
+    nothing; an authentication check that silently depends on import
+    order is a bug waiting to happen.
+    """
+    return (os.environ.get("ADMIN_PASSWORD") or settings.admin_password or "").strip()
+
+
 def is_enabled() -> bool:
     """Whether an admin password has been configured at all."""
-    return bool(settings.admin_password.strip())
+    return bool(password())
 
 
 def _secret() -> bytes:
@@ -54,7 +72,7 @@ def _secret() -> bytes:
     hash function were later found to leak.
     """
     return hashlib.sha256(
-        b"riverbend-admin-session|" + settings.admin_password.encode()
+        b"riverbend-admin-session|" + password().encode()
     ).digest()
 
 
@@ -62,7 +80,7 @@ def check_password(attempt: str) -> bool:
     """Verify a password attempt in constant time."""
     if not is_enabled():
         return False
-    return hmac.compare_digest(attempt.encode(), settings.admin_password.encode())
+    return hmac.compare_digest(attempt.encode(), password().encode())
 
 
 def issue_session() -> str:
