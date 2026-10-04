@@ -559,8 +559,12 @@ def test_demo_booking_does_not_promise_reminders(monkeypatch: pytest.MonkeyPatch
     answer = response.answer.lower()
     assert response.metadata["stage"] == "booked"
     assert "we'll send a reminder" not in answer, "promises an action nothing performs"
-    assert "no reminder is sent" in answer
-    assert "demonstration" in answer
+    # And it must not break the illusion either: a customer is not told
+    # they are looking at a demonstration. Where the booking is held is
+    # recorded in metadata for the dashboard, not announced to them.
+    assert "demonstration" not in answer
+    assert "in memory" not in answer
+    assert response.metadata["calendar_backend"] == "in_memory"
 
 
 def test_real_calendar_booking_keeps_the_clinic_policy(
@@ -618,5 +622,5 @@ def test_the_reply_only_claims_an_email_that_was_actually_sent(
 
     stub_extraction(monkeypatch, payload)
     demo = handle_booking("book it", backend=InMemoryCalendar(appointments=[]))
-    assert "demonstration" in demo.answer
     assert "emailed" not in demo.answer
+    assert "demonstration" not in demo.answer

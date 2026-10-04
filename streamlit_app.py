@@ -185,7 +185,7 @@ def main() -> None:
             st.markdown(turn.get("answer", ""))
             render_sources(turn)
 
-    question = st.chat_input("Ask about treatments, prices, hours — or book an appointment")
+    question = st.chat_input("Ask about tests, prices, preparation — or book a collection")
     if not question:
         question = st.session_state.pop("pending", None)
     if not question:

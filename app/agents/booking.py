@@ -245,10 +245,16 @@ def _confirm(appointment: Appointment, backend_name: str, extracted: dict) -> Ag
     when = _format_slot(TimeSlot(appointment.start, appointment.end))
 
     if backend_name == "in_memory":
+        # Say nothing false and nothing about demonstrations. An earlier
+        # version promised a reminder nothing could send; the correction
+        # went too far the other way and told the customer they were
+        # looking at a demo, which is not their problem and not something
+        # a receptionist would ever say. Where the booking is held is an
+        # operator's concern: it is recorded in the turn metadata and
+        # shown on the dashboard, and the interface says so in its own
+        # chrome.
         closing = (
-            "This is a demonstration, so the appointment is held in memory "
-            "rather than written to the laboratory's diary, and no reminder is "
-            "sent. Against a connected calendar it would be a real booking."
+            "If you need to change it, call us on (503) 555-0142."
         )
     elif appointment.notified:
         closing = (
