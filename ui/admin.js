@@ -1,5 +1,5 @@
 /*
- * Staff dashboard.
+ * Admin dashboard.
  *
  * Same approach as the chat page: plain JavaScript, no framework, no
  * build step, served by the same process as the API.
@@ -20,7 +20,7 @@ const escapeHtml = (s) => String(s ?? '')
   .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 
 const when = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? escapeHtml(iso)
@@ -108,12 +108,12 @@ const views = {
     if (!d.turns) return empty('No conversations recorded yet.');
     const inq = d.inquiries;
     const card = (n, k) => `<div class="card"><div class="n">${n}</div><div class="k">${k}</div></div>`;
-    const rate = inq.answer_rate_pct === null ? '—' : `${inq.answer_rate_pct}%`;
-    const median = d.latency_ms.p50 === null ? '—' : `${(d.latency_ms.p50 / 1000).toFixed(1)}s`;
+    const rate = inq.answer_rate_pct === null ? '-' : `${inq.answer_rate_pct}%`;
+    const median = d.latency_ms.p50 === null ? '-' : `${(d.latency_ms.p50 / 1000).toFixed(1)}s`;
     const gaps = d.knowledge_gaps.length
       ? d.knowledge_gaps.map((g) => `<div class="gap"><span>${escapeHtml(g.question)}</span>
           <span class="times">${g.times > 1 ? `asked ${g.times} times` : 'asked once'}</span></div>`).join('')
-      : '<p class="empty">None — everything asked was answerable.</p>';
+      : '<p class="empty">None - everything asked was answerable.</p>';
 
     return `
       <div class="cards">
@@ -126,7 +126,7 @@ const views = {
       </div>
       <div class="panel">
         <h2>Knowledge gaps</h2>
-        <p class="note">Questions the assistant declined — things customers want to
+        <p class="note">Questions the assistant declined, things customers want to
         know that the documents do not cover.</p>
         ${gaps}
       </div>`;
@@ -161,9 +161,9 @@ const views = {
       rows.map((r) => `
         <tr>
           <td>${when(r.starts_at)}</td>
-          <td>${escapeHtml(r.patient_name) || '—'}</td>
-          <td>${escapeHtml(r.phone) || '—'}</td>
-          <td>${escapeHtml(r.service) || '—'}</td>
+          <td>${escapeHtml(r.patient_name) || '-'}</td>
+          <td>${escapeHtml(r.phone) || '-'}</td>
+          <td>${escapeHtml(r.service) || '-'}</td>
           <td><span class="pill ${r.calendar_backend === 'google' ? '' : 'grey'}">${escapeHtml(r.calendar_backend)}</span></td>
         </tr>`),
     );
@@ -196,7 +196,7 @@ const views = {
       ['Name', 'Phone', 'Bookings', 'First seen', 'Last seen'],
       rows.map((r) => `
         <tr>
-          <td>${escapeHtml(r.name) || '—'}</td>
+          <td>${escapeHtml(r.name) || '-'}</td>
           <td><code>${escapeHtml(r.phone)}</code></td>
           <td>${r.visit_count}</td>
           <td>${when(r.first_seen)}</td>
@@ -229,15 +229,15 @@ async function showConversation(sessionId) {
     let trace = '';
     if ((t.sources || []).length) {
       const items = t.sources.map((s) => `<li><span class="crumb">${escapeHtml(s.breadcrumb)}</span>
-        — ${escapeHtml(s.source)} (${s.score})</li>`).join('');
+        - ${escapeHtml(s.source)} (${s.score})</li>`).join('');
       trace = `<div class="trace"><h4>Answered from</h4>${rewritten}<ol>${items}</ol></div>`;
     } else if (t.grounded === false) {
       trace = `<div class="trace"><h4>Answered from</h4>${rewritten}
-        <p class="note">Nothing — the documents did not cover this, so it declined.</p></div>`;
+        <p class="note">Nothing - the documents did not cover this, so it declined.</p></div>`;
     } else if (t.grounded === true) {
       // Answered from documents, but recorded before the trace was kept.
       trace = `<div class="trace"><h4>Answered from</h4>
-        <p class="note">Not recorded — this conversation pre-dates the
+        <p class="note">Not recorded - this conversation pre-dates the
         retrieval trace.</p></div>`;
     }
 

@@ -1,4 +1,4 @@
-"""Staff dashboard, for the Streamlit deployment.
+"""Admin dashboard, for the Streamlit deployment.
 
 The real dashboard is the one served by FastAPI at `/admin`. This is the
 same data through Streamlit's widgets, and it exists for one reason: the
@@ -37,7 +37,7 @@ import os
 
 import streamlit as st
 
-st.set_page_config(page_title="Staff dashboard — Riverbend", page_icon="🔒", layout="wide")
+st.set_page_config(page_title="Admin dashboard — Riverbend", page_icon="🔒", layout="wide")
 
 # Secrets reach the app through st.secrets, not the environment, and
 # app.config reads the environment. Bridge before importing it.
@@ -59,7 +59,7 @@ def sign_in() -> bool:
     if st.session_state.get("admin_ok"):
         return True
 
-    st.title("🔒 Staff dashboard")
+    st.title("🔒 Admin dashboard")
 
     if not admin_auth.is_enabled():
         st.error(
@@ -236,7 +236,7 @@ def main() -> None:
         return
 
     header, action = st.columns([5, 1])
-    header.title("Staff dashboard")
+    header.title("Admin dashboard")
     if action.button("Sign out", use_container_width=True):
         st.session_state.admin_ok = False
         st.rerun()

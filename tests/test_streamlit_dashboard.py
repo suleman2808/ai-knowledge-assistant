@@ -1,4 +1,4 @@
-"""Tests for the Streamlit staff dashboard.
+"""Tests for the Streamlit admin dashboard.
 
 Driven by Streamlit's own `AppTest`, which runs the page headlessly and
 exposes the elements it produced. That is worth more than a browser
@@ -16,7 +16,7 @@ from app.integrations.analytics import log_turn
 PASSWORD = "correct horse battery staple"
 # Absolute: AppTest resolves a relative path against the test file,
 # not the working directory.
-PAGE = PROJECT_ROOT / "pages" / "Staff_dashboard.py"
+PAGE = PROJECT_ROOT / "pages" / "Admin_dashboard.py"
 
 
 @pytest.fixture(autouse=True)
@@ -73,7 +73,7 @@ def test_the_dashboard_is_closed_until_you_sign_in() -> None:
     app = page()
 
     rendered = text_of(app)
-    assert "Staff dashboard" in rendered
+    assert "Admin dashboard" in rendered
     assert not app.tabs, "no data should be rendered before signing in"
 
 

@@ -147,7 +147,7 @@ function renderMeta(bubble, data) {
       crumb.className = 'crumb';
       crumb.textContent = source.breadcrumb;
       item.appendChild(crumb);
-      item.append(` — ${source.source} (${source.score})`);
+      item.append(` - ${source.source} (${source.score})`);
       list.appendChild(item);
     }
     details.appendChild(list);
@@ -372,7 +372,7 @@ function greet() {
 }
 
 const GREETING =
-  'Hello — I’m the assistant for Riverbend Diagnostics. I can answer ' +
+  'Hello, I’m the assistant for Riverbend Diagnostics. I can answer ' +
   'questions about our services, prices, hours and policies, book you an ' +
   'appointment, or pass on a complaint. What can I help with?';
 

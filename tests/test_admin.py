@@ -249,7 +249,7 @@ def test_the_dashboard_page_is_served(client: TestClient) -> None:
     page = client.get("/admin")
 
     assert page.status_code == 200
-    assert "Staff dashboard" in page.text
+    assert "Admin dashboard" in page.text
     assert client.get("/static/admin.js").status_code == 200
 
 
