@@ -125,8 +125,7 @@
 .gate-card .mark { width: 38px; height: 38px; color: var(--brand); }
 .gate-card .mark svg { width: 100%; height: 100%; display: block; }
 .gate-card h1 {
-  font-family: var(--display); font-size: 26px; font-weight: 400;
-  margin: 16px 0 0; letter-spacing: -.01em;
+  font-size: 20px; font-weight: 600; margin: 18px 0 0;
 }
 .gate-card .muted { margin: 5px 0 0; }
 
@@ -211,20 +210,19 @@ body:has(#app:not([hidden])) { background: var(--gate-bg); }
 
 .admin-head {
   display: flex; align-items: center; gap: 12px;
-  max-width: 1120px; margin: 0 auto; padding: 22px 24px 18px;
+  max-width: none; margin: 0; padding: 22px 32px 18px;
 }
 .admin-head .mark { flex: 0 0 34px; width: 34px; height: 34px; color: var(--brand); }
 .admin-head .mark svg { width: 100%; height: 100%; display: block; }
 .admin-head h1 {
-  font-family: var(--display); font-size: 22px; font-weight: 400;
-  margin: 0; letter-spacing: -.01em; line-height: 1.15;
+  font-size: 16px; font-weight: 600; margin: 0; line-height: 1.2;
 }
 .admin-head .who .muted { font-size: 12px; color: var(--faint); }
 .admin-head .spacer { flex: 1; }
 
 .tabs {
   display: flex; gap: 2px; flex-wrap: wrap;
-  max-width: 1120px; margin: 0 auto; padding: 0 24px;
+  max-width: none; margin: 0; padding: 0 32px;
   border-bottom: 1px solid var(--glass-line);
 }
 .tabs button {
@@ -237,7 +235,7 @@ body:has(#app:not([hidden])) { background: var(--gate-bg); }
 .tabs button:hover { color: var(--ink); }
 .tabs button.active { color: var(--brand-ink); border-bottom-color: var(--brand); font-weight: 500; }
 
-main { max-width: 1120px; margin: 0 auto; padding: 24px 24px 72px; }
+main { max-width: none; margin: 0; padding: 24px 32px 72px; }
 
 /* Everything the dashboard draws sits on the same frosted surface. */
 .card, .panel, table, .turn, .empty {
