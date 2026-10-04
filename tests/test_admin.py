@@ -285,3 +285,14 @@ def test_the_environment_wins_over_a_stale_settings_object(
 
     assert admin_auth.check_password("the real one") is True
     assert admin_auth.check_password("stale value") is False
+
+
+def test_the_ui_is_served_with_no_cache(client: TestClient) -> None:
+    """A stale `app.js` once made a fixed bug look unfixed for an hour.
+
+    `no-cache` does not mean "do not store" — the browser may keep the
+    file, it just has to revalidate before using it, which on the same
+    origin costs a 304.
+    """
+    for path in ("/", "/admin", "/analytics", "/static/app.js", "/static/styles.css"):
+        assert client.get(path).headers["cache-control"] == "no-cache", path

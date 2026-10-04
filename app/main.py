@@ -470,21 +470,47 @@ def analytics(days: int = 30) -> Any:
 # Static UI
 # --------------------------------------------------------------------------
 
+class RevalidatingStatics(StaticFiles):
+    """Serve the UI with `no-cache`.
+
+    Not `no-store` — the browser may keep the file, it just has to ask
+    whether it is still current, and a 304 costs almost nothing on the
+    same origin. Without this the default heuristic cache served a stale
+    `app.js` for long enough that a fixed bug looked unfixed, which is a
+    bad way to spend an afternoon. These are small files from the same
+    process; there is nothing to gain by caching them harder than that.
+    """
+
+    def is_not_modified(self, response_headers, request_headers) -> bool:  # noqa: ANN001
+        response_headers.setdefault("cache-control", "no-cache")
+        return super().is_not_modified(response_headers, request_headers)
+
+    async def get_response(self, path: str, scope):  # noqa: ANN001, ANN201
+        response = await super().get_response(path, scope)
+        response.headers.setdefault("cache-control", "no-cache")
+        return response
+
+
+def _page(name: str) -> FileResponse:
+    """One of the three HTML shells, with the same caching rule."""
+    return FileResponse(UI_DIR / name, headers={"cache-control": "no-cache"})
+
+
 if UI_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=UI_DIR), name="static")
+    app.mount("/static", RevalidatingStatics(directory=UI_DIR), name="static")
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
-        return FileResponse(UI_DIR / "index.html")
+        return _page("index.html")
 
     @app.get("/admin", include_in_schema=False)
     def admin_page() -> FileResponse:
         """The dashboard shell. Everything inside it requires a session."""
-        return FileResponse(UI_DIR / "admin.html")
+        return _page("admin.html")
 
     @app.get("/analytics", include_in_schema=False)
     def analytics_page() -> FileResponse:
-        return FileResponse(UI_DIR / "analytics.html")
+        return _page("analytics.html")
 
 
 def main() -> None:
