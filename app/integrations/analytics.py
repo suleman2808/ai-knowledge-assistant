@@ -115,6 +115,23 @@ CREATE INDEX IF NOT EXISTS idx_complaints_received ON complaints (received_at);
 -- is deliberate: an appointment nobody can be contacted about is not an
 -- appointment. Both this table and `patients` are only reachable through
 -- the password-protected dashboard.
+-- Someone asked to speak to a person. Kept separately from complaints
+-- because wanting a human is not a grievance: most of these are
+-- ordinary questions the assistant could not finish, and a run of them
+-- is the assistant failing rather than customers being difficult.
+CREATE TABLE IF NOT EXISTS callbacks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at   TEXT    NOT NULL,
+    session_id   TEXT    NOT NULL DEFAULT '',
+    patient_name TEXT    NOT NULL DEFAULT '',
+    phone        TEXT    NOT NULL DEFAULT '',
+    phone_key    TEXT    NOT NULL DEFAULT '',
+    -- What they were asking about when they gave up on the assistant.
+    -- Redacted like every other free text that reaches this file.
+    context      TEXT    NOT NULL DEFAULT '',
+    handled_at   TEXT    NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS bookings (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at        TEXT    NOT NULL,
@@ -594,6 +611,63 @@ def bookings(*, limit: int = 100, path: Path | None = None) -> list[dict[str, An
     with connect(path) as c:
         rows = c.execute(
             "SELECT * FROM bookings ORDER BY starts_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def record_callback(
+    *,
+    session_id: str,
+    patient_name: str = "",
+    phone: str = "",
+    context: str = "",
+    path: Path | None = None,
+) -> bool:
+    """Record a request to be called back by a person.
+
+    One per conversation: someone who asks twice wants one call, not two,
+    and a staff list with the same name three times is a list nobody
+    trusts.
+
+    Returns True if a new request was written, False if this conversation
+    already had one outstanding.
+    """
+    from app.integrations.phone import normalise as normalise_phone
+
+    with connect(path) as c:
+        existing = c.execute(
+            "SELECT 1 FROM callbacks WHERE session_id = ? AND handled_at = ''",
+            (session_id,),
+        ).fetchone()
+        if existing:
+            return False
+
+        c.execute(
+            "INSERT INTO callbacks "
+            "(created_at, session_id, patient_name, phone, phone_key, context) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                datetime.now().isoformat(timespec="seconds"),
+                session_id,
+                patient_name,
+                phone,
+                normalise_phone(phone) if phone else "",
+                redact(context)[:300],
+            ),
+        )
+    return True
+
+
+def callbacks(*, limit: int = 100, path: Path | None = None) -> list[dict[str, Any]]:
+    """Outstanding requests to speak to a person, oldest first.
+
+    Oldest first on purpose: this is a to-do list, and the person who has
+    been waiting longest should be at the top of it.
+    """
+    with connect(path) as c:
+        rows = c.execute(
+            "SELECT * FROM callbacks ORDER BY handled_at != '', created_at ASC LIMIT ?",
+            (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
 

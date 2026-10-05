@@ -125,10 +125,26 @@ def wants_a_person(message: str) -> bool:
     )
 
 
-PERSON_NOTE = (
-    "\n\nAnd yes - you can always speak to someone. Call us on (503) 555-0142 "
-    "during collection hours and a member of the team will help you directly."
-)
+def _person_note(name: str, phone: str) -> str:
+    """What to say to someone who has asked for a human.
+
+    With a number on file this is a promise, so it is only made when
+    the request has actually been written to the callback list - the
+    staff see it, or the assistant does not say it.
+    """
+    if phone:
+        who = f", {name.split()[0]}" if name else ""
+        return (
+            f"\n\nAnd yes - you can speak to a person{who}. I have put you"
+            f" on the team's callback list and they will ring you on {phone},"
+            " usually within one working day. If it is urgent, call us on"
+            " (503) 555-0142 and someone will pick up during collection hours."
+        )
+    return (
+        "\n\nAnd yes - you can always speak to someone. Call us on"
+        " (503) 555-0142 during collection hours, or give me a number and"
+        " I will ask the team to ring you back."
+    )
 
 PHONE = "(503) 555-0142"
 
@@ -412,6 +428,38 @@ def _is_mostly_contact_details(message: str) -> bool:
 
 
 
+def _contact_on_file(state: AssistantState) -> tuple[str, str]:
+    """The name and number held for this conversation, if any."""
+    from app.integrations.analytics import latest_booking
+
+    patient = state.get("patient") or {}
+    booking = latest_booking(state.get("session_id", "")) or {}
+
+    name = patient.get("name") or booking.get("patient_name") or ""
+    phone = booking.get("phone") or _spoken_phone(patient.get("phone") or "")
+    return name, phone
+
+
+def _request_callback(state: AssistantState, name: str, phone: str) -> bool:
+    """Put this conversation on the staff callback list.
+
+    Logged even without a number: staff can still read the transcript, and
+    a request nobody can action is still one the practice should see.
+    """
+    from app.integrations.analytics import record_callback
+
+    try:
+        return record_callback(
+            session_id=state.get("session_id", ""),
+            patient_name=name,
+            phone=phone,
+            context=state.get("message", ""),
+        )
+    except Exception:  # analytics must never break a reply
+        logger.exception("Could not record the callback request")
+        return False
+
+
 def finalise(state: AssistantState) -> dict[str, Any]:
     """Append any secondary-intent note and assemble the turn record.
 
@@ -433,8 +481,12 @@ def finalise(state: AssistantState) -> dict[str, Any]:
     # phone number are both right. Skipped when the answer already gives
     # the number, which the refusals and the complaint replies do.
     asked_for_a_person = wants_a_person(state.get("message", ""))
-    if asked_for_a_person and PHONE not in answer:
-        answer = f"{answer}{PERSON_NOTE}"
+    callback_logged = False
+    if asked_for_a_person:
+        name, phone = _contact_on_file(state)
+        callback_logged = _request_callback(state, name, phone)
+        if PHONE not in answer or phone:
+            answer = f"{answer}{_person_note(name, phone)}"
 
     turn = {
         "session_id": state.get("session_id", ""),
@@ -453,7 +505,17 @@ def finalise(state: AssistantState) -> dict[str, Any]:
             **state.get("agent_metadata", {}),
             # Worth seeing on the dashboard: a run of these is the
             # assistant failing at something, not patients being odd.
-            **({"asked_for_a_person": True} if asked_for_a_person else {}),
+            **(
+                {
+                    "asked_for_a_person": True,
+                    # Counted as an escalation, because that is what it is:
+                    # the assistant could not finish and a person has to.
+                    "escalated": True,
+                    "callback_logged": callback_logged,
+                }
+                if asked_for_a_person
+                else {}
+            ),
         },
     }
 
