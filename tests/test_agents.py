@@ -719,3 +719,86 @@ def test_cancelling_with_nothing_booked_says_so(tmp_path: Path, monkeypatch: pyt
 
     assert response.metadata["stage"] == "nothing_to_cancel"
     assert response.success is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "nah leave it for now, ill book other time",
+        "ill book some other time, not now",
+        "never mind",
+        "not today thanks",
+        "maybe later",
+        "leave it for now",
+    ],
+)
+def test_backing_out_of_a_booking_is_recognised(message: str) -> None:
+    """Reported: told "leave it for now", the agent re-sent the same
+    request for a name and number, verbatim, three times."""
+    from app.agents.booking import _is_deferral
+
+    assert _is_deferral(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        # "another time" means a different slot when a day comes with it.
+        "can I book another time slot on friday?",
+        "book another time on tuesday at 9am",
+        "book a blood test next tuesday",
+        "i want to book an appointment",
+    ],
+)
+def test_arranging_a_different_slot_is_not_backing_out(message: str) -> None:
+    from app.agents.booking import _is_deferral
+
+    assert _is_deferral(message) is False
+
+
+def test_backing_out_mid_booking_does_not_re_ask_for_details(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "analytics_db", tmp_path / "analytics.db")
+
+    response = handle_booking(
+        "nah leave it for now, ill book other time",
+        backend=InMemoryCalendar(appointments=[]),
+        session_id="s-defer",
+    )
+
+    assert response.metadata["stage"] == "deferred"
+    assert "full name" not in response.answer.lower()
+    assert "contact number" not in response.answer.lower()
+    assert response.needs_followup is False
+
+
+def test_a_soft_no_after_a_confirmed_booking_keeps_the_appointment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """"Leave it" with an appointment on the books means leave it alone.
+    Reading it as a cancellation would lose someone their slot."""
+    monkeypatch.setattr(settings, "analytics_db", tmp_path / "analytics.db")
+
+    calendar = InMemoryCalendar(appointments=[])
+    booked = handle_booking(
+        "book a blood test on 2026-10-06 at 9am, Sarah Chen, 503-555-0180",
+        backend=calendar,
+        session_id="s-keep",
+    )
+    log_turn(
+        {
+            "session_id": "s-keep",
+            "message": "book a blood test",
+            "answer": booked.answer,
+            "intent": "booking",
+            "agent_metadata": booked.metadata,
+        },
+        latency_ms=10,
+    )
+
+    response = handle_booking("leave it for now", backend=calendar, session_id="s-keep")
+
+    assert response.metadata["stage"] == "deferred"
+    assert len(calendar.appointments) == 1
+    assert "cancel" in response.answer.lower()  # offered, not performed

@@ -145,6 +145,11 @@ def _preference_window(preference: str | None) -> tuple[int, int] | None:
     }.get((preference or "").lower())
 
 
+# How many details to ask for in one message. Two is a question; five is
+# a form, and people abandon forms.
+MAX_ASKS_AT_ONCE = 2
+
+
 def _ask_for(missing: list[str], extracted: dict) -> AgentResponse:
     """Request the specific details still needed, and nothing else."""
     prompts = {
@@ -155,6 +160,13 @@ def _ask_for(missing: list[str], extracted: dict) -> AgentResponse:
         "phone": "a contact number",
     }
     wanted = [prompts[field] for field in missing if field in prompts]
+
+    # Asked for everything at once, this reads as a form: "what you'd like
+    # to come in for, which day suits you, your full name, a contact
+    # number and what time of day works best". A receptionist asks two
+    # things and then the rest; `missing` is already in the order the
+    # conversation needs them, so the first two are the right two.
+    wanted = wanted[:MAX_ASKS_AT_ONCE]
 
     if len(wanted) == 1:
         request = wanted[0]
@@ -320,6 +332,11 @@ def handle_booking(
     # which is how a cancellation turned into a second confirmation.
     if _wants_to_cancel(message):
         return _cancel(calendar, session_id)
+
+    # Someone backing out mid-booking is not a booking request with
+    # details missing, however much it looks like one to an extractor.
+    if _is_deferral(message):
+        return _defer(calendar, session_id)
 
     try:
         extracted = complete_json(
@@ -501,12 +518,95 @@ _NOT_CANCELLATIONS = (
 )
 
 
+# Backing out without the word "cancel". These are softer: someone who
+# says "leave it for now" while a booking is half-collected means stop,
+# but the same words said after an appointment is confirmed most likely
+# mean leave it as it is. So they are treated as walking away from an
+# unfinished booking, and as "no change" to a finished one - the reading
+# that cannot lose someone their appointment.
+_DEFERRAL_PHRASES = (
+    "leave it for now", "leave it", "not now", "not today", "not right now",
+    "maybe later", "later on", "never mind", "nevermind", "skip it",
+    "forget about it", "i'll do it later", "ill do it later",
+    "i'll come back", "ill come back",
+    # "book another time" is a retreat; "book another time slot on Friday"
+    # is a booking. The day is what tells them apart, and it is checked
+    # below rather than guessed at here.
+    "some other time", "some other day", "another time", "another day",
+)
+
+# Weekdays, relative days and clock times. A message carrying one of
+# these is arranging something, whatever else it says.
+_WHEN_WORDS = (
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+    "sunday", "tomorrow", "next week", "this week", "weekend",
+    "am", "pm", "o'clock", "morning", "afternoon", "evening",
+)
+
+
+def _mentions_a_when(text: str) -> bool:
+    """Whether the message names a day or a time."""
+    words = set(re.findall(r"[a-z']+", text))
+    if words & set(_WHEN_WORDS):
+        return True
+    return bool(re.search(r"\d{1,2}\s*(?::\d{2})?\s*(?:am|pm)|\d{1,2}/\d{1,2}", text))
+
+
 def _wants_to_cancel(message: str) -> bool:
     """Whether this message asks to call off an existing appointment."""
     text = " ".join(message.lower().split())
     if any(phrase in text for phrase in _NOT_CANCELLATIONS):
         return False
     return any(phrase in text for phrase in _CANCEL_PHRASES)
+
+
+def _is_deferral(message: str) -> bool:
+    """Whether this message backs out of booking without saying "cancel"."""
+    text = " ".join(message.lower().split())
+    if any(phrase in text for phrase in _NOT_CANCELLATIONS):
+        return False
+    if not any(phrase in text for phrase in _DEFERRAL_PHRASES):
+        return False
+    # Nobody names a day while walking away. "I'll book another time"
+    # defers; "can I book another time slot on Friday" does not.
+    return not _mentions_a_when(text)
+
+
+def _defer(calendar: CalendarBackend, session_id: str) -> AgentResponse:
+    """Acknowledge someone walking away from a booking.
+
+    The failure this fixes: told "nah leave it for now, I'll book other
+    time", the agent re-sent the same request for a name and a number,
+    verbatim, three times. Extraction found no date and no name, so the
+    agent did what it does when details are missing - ask for them -
+    while the patient was plainly trying to leave.
+    """
+    from app.integrations.analytics import latest_booking
+
+    booking = latest_booking(session_id)
+    if booking:
+        # They have an appointment and said something soft. Changing it on
+        # that basis would be guessing with someone's diary.
+        when = _describe_booking(booking)
+        return AgentResponse(
+            answer=(
+                f"No problem - I've left{when} exactly as it is. If you do want "
+                "to move it or cancel it, just say so and I'll take care of it."
+            ),
+            agent=AGENT_NAME,
+            success=True,
+            metadata={"stage": "deferred", "kept_booking": booking["event_id"]},
+        )
+
+    return AgentResponse(
+        answer=(
+            "No problem at all - I haven't booked anything. Whenever you're "
+            "ready, just tell me the day and I'll sort it out."
+        ),
+        agent=AGENT_NAME,
+        success=True,
+        metadata={"stage": "deferred"},
+    )
 
 
 def _cancel(calendar: CalendarBackend, session_id: str) -> AgentResponse:
@@ -556,7 +656,7 @@ def _cancel(calendar: CalendarBackend, session_id: str) -> AgentResponse:
     when = _describe_booking(booking)
     return AgentResponse(
         answer=(
-            f"That's cancelled{when}. Nothing further to do - and if you'd like "
+            f"That's cancelled -{when}. Nothing further to do, and if you'd like "
             "to rebook, just tell me a day and time that suits you."
         ),
         agent=AGENT_NAME,
@@ -580,4 +680,4 @@ def _describe_booking(booking: dict[str, Any]) -> str:
     service = (booking.get("service") or "").strip()
     subject = f"your {service}" if service else "your appointment"
     day = start.strftime("%A %d %B").replace(" 0", " ")
-    return f" - {subject} on {day} at {_format_time(start)}"
+    return f" {subject} on {day} at {_format_time(start)}"
