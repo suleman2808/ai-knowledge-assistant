@@ -293,6 +293,7 @@ def handle_booking(
     history: list[dict[str, str]] | None = None,
     backend: CalendarBackend | None = None,
     patient: dict[str, Any] | None = None,
+    session_id: str = "",
 ) -> AgentResponse:
     """Handle an appointment request.
 
@@ -303,6 +304,8 @@ def handle_booking(
         patient: A recognised returning customer, from the identify node.
             Their name and number fill the gaps so the assistant stops
             asking for details it already holds.
+        session_id: This conversation, used to find an appointment the
+            patient now wants cancelled.
 
     Returns:
         An `AgentResponse`. `needs_followup` is True whenever the agent
@@ -310,6 +313,13 @@ def handle_booking(
     """
     calendar = backend or get_calendar()
     today = date.today()
+
+    # Cancelling is checked before anything else. Sending "cancel it, I've
+    # changed my mind" through extraction produces a booking request with
+    # no date, and the agent cheerfully asks which day they would like -
+    # which is how a cancellation turned into a second confirmation.
+    if _wants_to_cancel(message):
+        return _cancel(calendar, session_id)
 
     try:
         extracted = complete_json(
@@ -468,3 +478,101 @@ def handle_booking(
         return failure(AGENT_NAME, "unexpected", f"{type(exc).__name__}: {exc}", stage="create")
 
     return _confirm(appointment, calendar.name, normalised)
+
+
+# ---------------------------------------------------------------------------
+# Cancelling
+# ---------------------------------------------------------------------------
+
+# Decided in code, not by the model. A cancellation is destructive and
+# one-sided: booking again is easy, un-cancelling is not, so the trigger
+# is a short list of unambiguous phrases rather than a judgement call.
+_CANCEL_PHRASES = (
+    "cancel", "call it off", "scrap it", "forget it", "undo", "unbook",
+    "don't want it", "do not want it", "no longer need", "not needed",
+    "changed my mind", "change of mind",
+)
+
+# Phrases that contain a trigger word but are not asking to cancel.
+_NOT_CANCELLATIONS = (
+    "cancellation policy", "cancellation fee", "cancellation charge",
+    "how do i cancel", "can i cancel", "how to cancel", "if i cancel",
+    "late cancellation", "cancellation notice",
+)
+
+
+def _wants_to_cancel(message: str) -> bool:
+    """Whether this message asks to call off an existing appointment."""
+    text = " ".join(message.lower().split())
+    if any(phrase in text for phrase in _NOT_CANCELLATIONS):
+        return False
+    return any(phrase in text for phrase in _CANCEL_PHRASES)
+
+
+def _cancel(calendar: CalendarBackend, session_id: str) -> AgentResponse:
+    """Cancel this conversation's appointment, if it still has one."""
+    from app.integrations.analytics import latest_booking, mark_cancelled
+
+    booking = latest_booking(session_id)
+    if not booking:
+        return AgentResponse(
+            answer=(
+                "I don't have an appointment on file for this conversation to "
+                "cancel. If you booked by phone or on an earlier visit, call us "
+                "on (503) 555-0142 with the patient's name and we'll take care "
+                "of it."
+            ),
+            agent=AGENT_NAME,
+            success=True,
+            metadata={"stage": "nothing_to_cancel"},
+        )
+
+    try:
+        removed = calendar.cancel_appointment(booking["event_id"])
+    except CalendarError as exc:
+        logger.error("Cancellation failed: %s", exc)
+        return AgentResponse(
+            answer=(
+                "I couldn't reach the appointment diary just now, so I haven't "
+                "cancelled anything - I don't want to tell you it's done when "
+                "it isn't. Please call us on (503) 555-0142 and we'll cancel it "
+                "straight away."
+            ),
+            agent=AGENT_NAME,
+            success=False,
+            metadata={"stage": "cancel_failed", "error": str(exc)},
+        )
+
+    # Marked even when the calendar had already lost it: as far as this
+    # conversation is concerned the appointment is off, and the record
+    # should say so.
+    mark_cancelled(booking["id"])
+
+    when = _describe_booking(booking)
+    return AgentResponse(
+        answer=(
+            f"That's cancelled{when}. Nothing further to do - and if you'd like "
+            "to rebook, just tell me a day and time that suits you."
+        ),
+        agent=AGENT_NAME,
+        success=True,
+        metadata={
+            "stage": "cancelled",
+            "event_id": booking["event_id"],
+            "calendar_backend": calendar.name,
+            "was_in_calendar": removed,
+        },
+    )
+
+
+def _describe_booking(booking: dict[str, Any]) -> str:
+    """" - your blood test on Monday 5 October at 10:00 AM", or "" if unknown."""
+    try:
+        start = datetime.fromisoformat(booking["starts_at"])
+    except (ValueError, KeyError, TypeError):
+        return ""
+
+    service = (booking.get("service") or "").strip()
+    subject = f"your {service}" if service else "your appointment"
+    day = start.strftime("%A %d %B").replace(" 0", " ")
+    return f" - {subject} on {day} at {_format_time(start)}"

@@ -113,11 +113,11 @@ function createTypewriter(element, onSettled) {
       // run there, so pacing it would mean never finishing at all.
       shown = document.hidden
         ? full.length
-        // A proportion of the backlog rather than a fixed rate, so the
-        // reveal takes about a second whether the answer is two lines or
-        // twenty, and never crawls behind a long one. The minimum keeps
-        // the last few characters from taking a frame each.
-        : shown + Math.max(2, Math.ceil(remaining / 25));
+        // A proportion of the backlog rather than a fixed rate, so a
+        // long answer does not take proportionally longer to appear. The
+        // divisor is the pace: higher reads as someone typing, lower as
+        // text being pasted.
+        : shown + Math.max(1, Math.ceil(remaining / 90));
       element.innerHTML = renderMarkdown(full.slice(0, shown));
       transcript.scrollTop = transcript.scrollHeight;
     }

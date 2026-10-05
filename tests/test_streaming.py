@@ -109,3 +109,44 @@ def test_long_dashes_are_folded_to_hyphens() -> None:
     """Model prose is normalised at the same boundary as invisibles."""
     assert normalise("open 8am \u2014 6pm") == "open 8am - 6pm"
     assert normalise("Monday \u2013 Friday") == "Monday - Friday"
+
+
+# ---------------------------------------------------------------------------
+# Compound questions
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("question", "parts"),
+    [
+        (
+            "what are your opening hours and where are your branches?",
+            ["what are your opening hours", "where are your branches"],
+        ),
+        (
+            "do I need to fast for a lipid profile, and how much does it cost?",
+            ["do I need to fast for a lipid profile", "how much does it cost"],
+        ),
+        ("what are your hours? where are you?", ["what are your hours", "where are you"]),
+    ],
+)
+def test_a_compound_question_is_split(question: str, parts: list[str]) -> None:
+    from app.agents.inquiry import _split_question
+
+    assert _split_question(question) == parts
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "how much is a lipid profile?",
+        # "and" inside a noun phrase is not a join between two questions.
+        "do you test ferritin and iron studies?",
+        "is the Beaverton branch open and nearby",
+    ],
+)
+def test_a_single_question_is_left_alone(question: str) -> None:
+    """Splitting a simple question would double the model calls for nothing."""
+    from app.agents.inquiry import _split_question
+
+    assert _split_question(question) == []

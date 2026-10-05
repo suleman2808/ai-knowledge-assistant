@@ -104,6 +104,32 @@ class GoogleCalendar:
         self._calendar_id = settings.google_calendar_id
         self._service = self._build_service()
 
+    def cancel_appointment(self, event_id: str) -> bool:
+        """Delete the event, telling the attendees why their diary changed.
+
+        A 404 or 410 means it is already gone, which is the outcome the
+        caller wanted; anything else is a calendar failure and is raised.
+        """
+        try:
+            (
+                self._service.events()
+                .delete(
+                    calendarId=self._calendar_id,
+                    eventId=event_id,
+                    sendUpdates="all" if settings.clinic_email else "none",
+                )
+                .execute()
+            )
+        except Exception as exc:
+            status = getattr(getattr(exc, "resp", None), "status", None)
+            if status in (404, 410):
+                logger.info("Event %s was already gone", event_id)
+                return False
+            raise CalendarError(f"Could not cancel the appointment: {exc}") from exc
+
+        logger.info("Cancelled event %s", event_id)
+        return True
+
     @property
     def name(self) -> str:
         return "google"

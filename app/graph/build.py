@@ -159,6 +159,9 @@ def booking_node(state: AssistantState) -> dict[str, Any]:
             state["message"],
             history=state.get("history"),
             patient=state.get("patient"),
+            # Cancelling needs the event id of what was booked, and the
+            # session is how that is found again.
+            session_id=state.get("session_id", ""),
         ),
     )
 

@@ -9,6 +9,7 @@ regress. Whether the model writes a nice sentence is not a unit test.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +18,8 @@ from app.agents.base import AgentResponse, normalise
 from app.agents.booking import handle_booking
 from app.agents.complaint import ComplaintStore, handle_complaint
 from app.agents.inquiry import NO_ANSWER, answer_inquiry
+from app.config import settings
+from app.integrations.analytics import log_turn
 from app.integrations.calendar import (
     Appointment,
     CalendarError,
@@ -624,3 +627,95 @@ def test_the_reply_only_claims_an_email_that_was_actually_sent(
     demo = handle_booking("book it", backend=InMemoryCalendar(appointments=[]))
     assert "emailed" not in demo.answer
     assert "demonstration" not in demo.answer
+
+
+# ---------------------------------------------------------------------------
+# Cancelling an appointment
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "cancel it, my mind changed",
+        "please cancel my appointment",
+        "actually, I've changed my mind",
+        "forget it",
+        "I no longer need that appointment",
+    ],
+)
+def test_a_cancellation_is_recognised(message: str) -> None:
+    from app.agents.booking import _wants_to_cancel
+
+    assert _wants_to_cancel(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "what is your cancellation policy?",
+        "can I cancel an appointment later?",
+        "how do I cancel if something comes up",
+        "is there a late cancellation fee",
+        "book me a blood test on Tuesday",
+    ],
+)
+def test_a_question_about_cancelling_is_not_a_cancellation(message: str) -> None:
+    """Asking about the policy must not call off the patient's appointment."""
+    from app.agents.booking import _wants_to_cancel
+
+    assert _wants_to_cancel(message) is False
+
+
+def test_cancelling_removes_the_appointment_from_the_calendar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug: 'cancel it' was extracted as a booking request with no
+    date, so the agent asked which day they would like - and a following
+    'yes' re-confirmed the appointment they were trying to call off."""
+    from app.agents.booking import handle_booking
+
+    monkeypatch.setattr(settings, "analytics_db", tmp_path / "analytics.db")
+
+    calendar = InMemoryCalendar(appointments=[])
+    booked = handle_booking(
+        "book a blood test on 2026-10-06 at 9am, Sarah Chen, 503-555-0180",
+        backend=calendar,
+        session_id="s1",
+    )
+    assert booked.metadata["stage"] == "booked"
+    assert len(calendar.appointments) == 1
+
+    # The graph logs every turn, and logging a booked turn is what writes
+    # the row the cancellation later reads. Doing it here keeps the test
+    # on the agent while still exercising the real lookup.
+    log_turn(
+        {
+            "session_id": "s1",
+            "message": "book a blood test",
+            "answer": booked.answer,
+            "intent": "booking",
+            "agent_metadata": booked.metadata,
+        },
+        latency_ms=10,
+    )
+
+    cancelled = handle_booking("cancel it, my mind changed", backend=calendar, session_id="s1")
+
+    assert cancelled.metadata["stage"] == "cancelled"
+    assert calendar.appointments == []
+    assert "cancelled" in cancelled.answer.lower()
+    assert "booked in" not in cancelled.answer.lower()
+
+
+def test_cancelling_with_nothing_booked_says_so(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.agents.booking import handle_booking
+
+    monkeypatch.setattr(settings, "analytics_db", tmp_path / "analytics.db")
+
+    response = handle_booking(
+        "cancel it", backend=InMemoryCalendar(appointments=[]), session_id="empty"
+    )
+
+    assert response.metadata["stage"] == "nothing_to_cancel"
+    assert response.success is True

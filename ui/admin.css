@@ -220,6 +220,17 @@ body:has(#app:not([hidden])) { background: var(--gate-bg); }
 .admin-head .who .muted { font-size: 12px; color: var(--faint); }
 .admin-head .spacer { flex: 1; }
 
+/* Over the ambient wash, a surface-coloured button with muted text
+   disappears. These get the frosted fill and full-strength ink. */
+.admin-head .ghost {
+  background: var(--field);
+  border-color: var(--glass-line);
+  color: var(--ink);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.admin-head .ghost:hover { border-color: var(--brand); color: var(--brand-ink); }
+
 .tabs {
   display: flex; gap: 2px; flex-wrap: wrap;
   max-width: none; margin: 0; padding: 0 32px;

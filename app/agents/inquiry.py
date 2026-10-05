@@ -21,10 +21,11 @@ with the evidence in front of it.
 from __future__ import annotations
 
 import logging
+import re
 
 from app.agents.base import AgentResponse, failure, guarded_tokens
 from app.config import settings
-from app.llm import LLMError, complete, complete_verbose
+from app.llm import LLMError, active_sink, complete, complete_verbose
 from app.prompts import render
 from app.rag.retriever import RetrievalResult, RetrievalStatus, retrieve
 
@@ -185,6 +186,13 @@ def answer_inquiry(
     result = retrieve(search_query)
 
     if not result.grounded:
+        # A compound question can also embed to a point between its two
+        # halves and clear neither threshold.
+        split = _retrieve_each_part(search_query)
+        if split is not None:
+            result = split
+
+    if not result.grounded:
         logger.info(
             "Inquiry not grounded (%s, best=%.3f): %s",
             result.status.value, result.best_score, search_query[:80],
@@ -221,6 +229,15 @@ def answer_inquiry(
         )
 
     if _is_refusal(response.text):
+        # Before accepting the refusal: a compound question is the one
+        # case where the model is right that the context cannot answer
+        # *the question* while the documents can answer both halves of
+        # it. Retrieving per part and asking once more is cheap, and it
+        # happens only on a path that was about to decline anyway.
+        retried = _retry_as_parts(search_query, question, history, result)
+        if retried is not None:
+            return retried
+
         # Retrieval found something above the threshold, but the model
         # judged it not to answer this question. This is the safeguard
         # working, so it is logged at info rather than as an error.
@@ -258,5 +275,164 @@ def answer_inquiry(
             "prompt_tokens": response.prompt_tokens,
             "completion_tokens": response.completion_tokens,
             "model": response.model,
+        },
+    )
+
+
+# A compound question is two questions sharing a sentence. These are the
+# joins that separate them; "and" inside a noun phrase ("ferritin and
+# iron studies") is why the parts are length-checked before use.
+_PART_SPLIT = re.compile(
+    r"\s*(?:\?+|;|\band\s+also\b|,\s*\band\b|\band\b|\balso\b)\s*",
+    re.IGNORECASE,
+)
+MIN_PART_WORDS = 3
+MAX_PARTS = 3
+
+
+def _split_question(question: str) -> list[str]:
+    """Break a compound question into the questions it is made of."""
+    parts = [p.strip(" ?.,") for p in _PART_SPLIT.split(question) if p and p.strip()]
+    parts = [p for p in parts if len(p.split()) >= MIN_PART_WORDS]
+    return parts[:MAX_PARTS] if len(parts) > 1 else []
+
+
+def _retrieve_each_part(question: str) -> RetrievalResult | None:
+    """Retrieve for each half of a compound question and merge the results.
+
+    Returns None when the question is not compound, or when the parts do
+    no better than the whole - in which case the caller keeps the
+    original result and declines, which is the right outcome.
+    """
+    parts = _split_question(question)
+    if not parts:
+        return None
+
+    chunks: list[Any] = []
+    seen: set[str] = set()
+    best = 0.0
+    grounded_parts = 0
+
+    for part in parts:
+        outcome = retrieve(part)
+        best = max(best, outcome.best_score)
+        if not outcome.grounded:
+            continue
+        grounded_parts += 1
+        for chunk in outcome.chunks:
+            key = f"{chunk.source}#{chunk.breadcrumb}"
+            if key not in seen:
+                seen.add(key)
+                chunks.append(chunk)
+
+    # One half answerable is enough to be worth replying to: the model is
+    # told to answer what the documents cover and say what they do not.
+    if not grounded_parts or not chunks:
+        return None
+
+    logger.info(
+        "Compound question answered from %d of %d parts: %s",
+        grounded_parts, len(parts), question[:80],
+    )
+    return RetrievalResult(
+        query=question,
+        status=RetrievalStatus.OK,
+        chunks=chunks,
+        best_score=best,
+    )
+
+
+def _retry_as_parts(
+    search_query: str,
+    question: str,
+    history: list[dict[str, str]] | None,
+    first: RetrievalResult,
+) -> AgentResponse | None:
+    """Answer a compound question one half at a time.
+
+    The failure this fixes: asked "what are your opening hours and where
+    are your branches", retrieval finds the hours and the model then
+    refuses, correctly, because the context does not answer the whole
+    question. The patient gets nothing, though half the answer was
+    sitting right there.
+
+    Each half is treated as its own question - retrieved for, and
+    answered on its own context - and the halves that can be answered are
+    joined. A half that cannot be answered is simply left out: the reply
+    says what the documents cover and nothing else, which is the same
+    promise the single-question path makes.
+
+    Returns None when the question is not compound or no half could be
+    answered, and the caller then declines as it would have.
+    """
+    parts = _split_question(search_query)
+    if not parts:
+        return None
+
+    answers: list[str] = []
+    sources: list[dict[str, str | float]] = []
+    seen: set[str] = set()
+    best = 0.0
+
+    for part in parts:
+        outcome = retrieve(part)
+        best = max(best, outcome.best_score)
+        if not outcome.grounded:
+            continue
+
+        # Streamed like any other answer. The guard matters more here
+        # than anywhere: a part the documents cannot answer refuses, and
+        # that refusal must not appear on screen between two halves that
+        # did answer.
+        if answers:
+            sink = active_sink()
+            if sink:
+                sink("\n\n")
+
+        try:
+            with guarded_tokens(INSUFFICIENT):
+                reply = complete_verbose(
+                    render(
+                        "inquiry_user",
+                        context=outcome.as_context(),
+                        history=_format_history(history),
+                        question=part,
+                    ),
+                    system=render("inquiry_system"),
+                    stream=True,
+                )
+        except LLMError as exc:
+            logger.error("Compound part failed: %s", exc)
+            continue
+
+        if _is_refusal(reply.text):
+            continue
+
+        answers.append(reply.text.strip())
+        for source in outcome.sources:
+            key = f"{source['source']}#{source['breadcrumb']}"
+            if key not in seen:
+                seen.add(key)
+                sources.append(source)
+
+    if not answers:
+        return None
+
+    logger.info(
+        "Compound question answered in %d of %d parts: %s",
+        len(answers), len(parts), question[:80],
+    )
+    return AgentResponse(
+        answer="\n\n".join(answers),
+        agent=AGENT_NAME,
+        success=True,
+        sources=sources,
+        metadata={
+            "grounded": True,
+            "compound_parts": len(parts),
+            "compound_answered": len(answers),
+            "search_query": search_query,
+            "retrieval_status": RetrievalStatus.OK.value,
+            "best_score": round(best, 3),
         },
     )

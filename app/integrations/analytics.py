@@ -31,7 +31,7 @@ import logging
 import re
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -130,7 +130,11 @@ CREATE TABLE IF NOT EXISTS bookings (
     starts_at         TEXT    NOT NULL DEFAULT '',
     ends_at           TEXT    NOT NULL DEFAULT '',
     calendar_backend  TEXT    NOT NULL DEFAULT '',
-    notes             TEXT    NOT NULL DEFAULT ''
+    notes             TEXT    NOT NULL DEFAULT '',
+    -- Cancelled appointments are marked, never deleted: the row is the
+    -- only evidence the booking happened, and a cancellation is exactly
+    -- what a manager wants to see.
+    cancelled_at      TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookings_starts ON bookings (starts_at);
@@ -155,6 +159,7 @@ CREATE TABLE IF NOT EXISTS patients (
 MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     "bookings": [
         ("phone_key", "TEXT NOT NULL DEFAULT ''"),
+        ("cancelled_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "turns": [
         ("answer", "TEXT NOT NULL DEFAULT ''"),
@@ -591,6 +596,37 @@ def bookings(*, limit: int = 100, path: Path | None = None) -> list[dict[str, An
             "SELECT * FROM bookings ORDER BY starts_at DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def latest_booking(session_id: str, *, path: Path | None = None) -> dict[str, Any] | None:
+    """The most recent appointment still standing in this conversation.
+
+    Cancelling needs the event id, and the only place that survives the
+    turn is this table. Reading it back is cheaper and more reliable than
+    asking the model to remember an identifier it was never shown.
+    """
+    if not session_id:
+        return None
+    with connect(path) as c:
+        row = c.execute(
+            "SELECT * FROM bookings WHERE session_id = ? AND cancelled_at = '' "
+            "ORDER BY id DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def mark_cancelled(booking_id: int, *, path: Path | None = None) -> None:
+    """Record that an appointment was cancelled, without deleting it.
+
+    The row is the only evidence the booking ever happened, and a
+    cancelled appointment is exactly the thing a manager wants to see.
+    """
+    with connect(path) as c:
+        c.execute(
+            "UPDATE bookings SET cancelled_at = ? WHERE id = ?",
+            (datetime.now(UTC).isoformat(timespec="seconds"), booking_id),
+        )
 
 
 def complaints(*, limit: int = 100, path: Path | None = None) -> list[dict[str, Any]]:

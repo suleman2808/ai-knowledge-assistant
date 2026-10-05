@@ -143,6 +143,15 @@ class CalendarBackend(Protocol):
         """Book `slot` and return the created appointment."""
         ...
 
+    def cancel_appointment(self, event_id: str) -> bool:
+        """Cancel a previously created appointment.
+
+        Returns True if it was cancelled, False if it was already gone.
+        Raises `CalendarError` only when the calendar itself failed, so a
+        caller can tell "nothing to cancel" from "could not reach Google".
+        """
+        ...
+
     @property
     def name(self) -> str:
         """Backend identifier, recorded in analytics."""
@@ -322,6 +331,14 @@ class InMemoryCalendar:
         self.appointments.append(appointment)
         logger.info("Booked %s for %s", slot.start, patient_name)
         return appointment
+
+    def cancel_appointment(self, event_id: str) -> bool:
+        before = len(self.appointments)
+        self.appointments = [a for a in self.appointments if a.event_id != event_id]
+        cancelled = len(self.appointments) < before
+        if cancelled:
+            logger.info("Cancelled %s", event_id)
+        return cancelled
 
 
 _backend: CalendarBackend | None = None
