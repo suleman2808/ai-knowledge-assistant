@@ -402,3 +402,85 @@ def test_an_answer_that_already_offers_the_phone_is_not_repeated() -> None:
     }
 
     assert finalise(state)["turn"]["answer"].count(PHONE) == 1
+
+
+# ---------------------------------------------------------------------------
+# Questions about the patient's own details
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "you already know my number right?",
+        "do you have my phone number?",
+        "what is my name?",
+        "when is my appointment?",
+        "do you remember my details",
+    ],
+)
+def test_asking_what_we_hold_is_not_a_documents_question(message: str) -> None:
+    """Reported: asked "you already know my number right?" seconds after
+    giving it, the assistant searched the laboratory's documents and said
+    it didn't have that information."""
+    from app.graph.router import _asks_about_their_own_details
+
+    assert _asks_about_their_own_details(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        # "my report" is a question about turnaround times, which the
+        # documents do answer.
+        "when will my report be ready?",
+        "how much is a full blood count?",
+        "my number is 503-555-0122",
+        "can I change my booking to friday",
+    ],
+)
+def test_other_questions_still_reach_their_agent(message: str) -> None:
+    from app.graph.router import _asks_about_their_own_details
+
+    assert _asks_about_their_own_details(message) is False
+
+
+def test_the_number_is_read_back_the_way_it_is_written() -> None:
+    """The patient record keeps a normalised key for matching; showing it
+    raw reads as a leaked database field."""
+    from app.graph.build import _own_details_answer
+
+    answer = _own_details_answer(
+        {
+            "message": "you already know my number right?",
+            "patient": {"name": "Sam Reed", "phone": "5035550122"},
+            "session_id": "",
+        }
+    )
+
+    assert "(503) 555-0122" in answer
+    assert "5035550122" not in answer
+
+
+def test_a_when_question_is_not_answered_with_yes() -> None:
+    from app.graph.build import _own_details_answer
+
+    answer = _own_details_answer(
+        {
+            "message": "when is my appointment?",
+            "patient": {"name": "Sam Reed", "phone": "5035550122"},
+            "session_id": "",
+        }
+    )
+
+    assert not answer.startswith("Yes")
+
+
+def test_with_nothing_on_file_it_says_so_plainly() -> None:
+    from app.graph.build import _own_details_answer
+
+    answer = _own_details_answer(
+        {"message": "do you have my number?", "patient": None, "session_id": ""}
+    )
+
+    assert "haven't given me" in answer

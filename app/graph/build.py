@@ -232,6 +232,94 @@ def complaint_node(state: AssistantState) -> dict[str, Any]:
     )
 
 
+def _spoken_phone(digits: str) -> str:
+    """Format a stored number the way it is written on a card."""
+    bare = "".join(c for c in digits if c.isdigit())
+    if len(bare) == 10:
+        return f"({bare[:3]}) {bare[3:6]}-{bare[6:]}"
+    return digits
+
+
+def _own_details_answer(state: AssistantState) -> str:
+    """Answer "do you already have my number?" from what is actually held.
+
+    Everything here comes from this conversation or from the patient
+    record the identify node matched - never from the documents, which is
+    where this question used to go and why it was refused.
+    """
+    from app.integrations.analytics import latest_booking
+
+    message = state.get("message", "").lower()
+    patient = state.get("patient") or {}
+    booking = latest_booking(state.get("session_id", "")) or {}
+
+    name = patient.get("name") or booking.get("patient_name") or ""
+    # The booking stores the number as the patient typed it; the patient
+    # record keeps a normalised key for matching. Reading the key back to
+    # them ("5035550122") looks like a database field, so the typed form
+    # wins and the key is only ever shown formatted.
+    phone = booking.get("phone") or _spoken_phone(patient.get("phone") or "")
+
+    wants_appointment = any(
+        word in message for word in ("appointment", "booking", "slot")
+    )
+    wants_phone = any(word in message for word in ("number", "phone", "mobile"))
+    wants_name = "name" in message
+
+    known: list[str] = []
+    if wants_appointment and booking.get("starts_at"):
+        from app.agents.booking import _describe_booking
+
+        described = _describe_booking(booking).strip()
+        if described:
+            known.append(f"you're booked in for {described}")
+    if wants_phone and phone:
+        known.append(f"I have {phone} as your contact number")
+    if wants_name and name:
+        known.append(f"you're down as {name}")
+
+    if not known:
+        # Asked about an appointment there isn't one of. Listing their
+        # name and number instead would answer a question nobody asked.
+        if wants_appointment:
+            return (
+                "You don't have an appointment booked in this conversation. "
+                "If you'd like one, tell me what you need and which day suits "
+                "you, and I'll get it arranged."
+            )
+
+        # Nothing specific was asked for: say what there is, which is the
+        # honest answer to "what do you have".
+        if phone or name:
+            held = " and ".join(
+                part for part in (
+                    f"your name as {name}" if name else "",
+                    f"your number as {phone}" if phone else "",
+                ) if part
+            )
+            return (
+                f"Yes - I have {held} from this conversation. I'll use those "
+                "unless you tell me otherwise."
+            )
+        return (
+            "Not yet - you haven't given me a name or a number in this "
+            "conversation, so there's nothing on file. Tell me either and "
+            "I'll keep it with your booking."
+        )
+
+    # "Yes" answers a yes/no question. "When is my appointment" is not
+    # one, and "Yes - you're booked in for..." reads as a non sequitur.
+    answering_yes_no = any(
+        opener in message
+        for opener in ("do you", "have you", "you already", "you know",
+                       "right?", "correct?", "did you")
+    )
+    sentence = ", and ".join(known)
+    if answering_yes_no:
+        return f"Yes - {sentence}."
+    return sentence[:1].upper() + sentence[1:] + "."
+
+
 def other_node(state: AssistantState) -> dict[str, Any]:
     """Handle greetings, thanks and anything outside the laboratory's scope.
 
@@ -251,7 +339,10 @@ def other_node(state: AssistantState) -> dict[str, Any]:
 
     patient = state.get("patient")
 
-    if routed_by == "keyword":
+    if "own details" in reason:
+        kind = "own_details"
+        answer = _own_details_answer(state)
+    elif routed_by == "keyword":
         kind = "farewell" if ("farewell" in reason or "thanks" in reason) else "greeting"
         answer = FAREWELL if kind == "farewell" else GREETING
         # Greet a returning customer by name. Only on a greeting: opening

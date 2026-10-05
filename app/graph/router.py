@@ -53,6 +53,28 @@ PLEASANTRIES: dict[str, str] = {
 # Longest pleasantry worth checking. Anything longer has content in it.
 MAX_PLEASANTRY_WORDS = 3
 
+# Questions about the patient's own details. These are not questions
+# about the laboratory, and sending them to the documents produces "I
+# don't have that in the laboratory's information" about a phone number
+# the patient typed thirty seconds earlier - which reads as the system
+# not listening rather than as it being careful.
+_OWN_DETAILS = (
+    "my number", "my phone", "my mobile", "my name", "my details",
+    "my contact", "my booking", "my appointment", "my slot",
+)
+_ASKING_ABOUT = (
+    "you already", "you know", "do you have", "have you got", "what is",
+    "what's", "whats", "when is", "when's", "whens", "remember",
+    "on file", "got my", "know my", "have my", "confirm",
+)
+
+
+def _asks_about_their_own_details(message: str) -> bool:
+    """Whether the message asks what the assistant holds about them."""
+    text = " ".join(message.lower().split())
+    return (any(subject in text for subject in _OWN_DETAILS)
+            and any(verb in text for verb in _ASKING_ABOUT))
+
 
 def _normalise(message: str) -> str:
     """Lower-case and strip punctuation for exact matching."""
@@ -70,6 +92,9 @@ def _fast_path(message: str) -> tuple[Intent, str, str] | None:
     normalised = _normalise(message)
     if not normalised:
         return ("other", "empty message", "empty")
+
+    if _asks_about_their_own_details(message):
+        return ("other", "asking about their own details", "own_details")
 
     if len(normalised.split()) > MAX_PLEASANTRY_WORDS:
         return None
