@@ -515,12 +515,17 @@ def _cancel(calendar: CalendarBackend, session_id: str) -> AgentResponse:
 
     booking = latest_booking(session_id)
     if not booking:
+        # Usually this is someone calling off a booking that was still
+        # being collected - they gave a day, the agent asked for a name,
+        # and they changed their mind before it was ever written down.
+        # Telling them there is "nothing on file" and handing them a
+        # phone number answers a question they did not ask. Nothing was
+        # booked, so say that, and leave the door open.
         return AgentResponse(
             answer=(
-                "I don't have an appointment on file for this conversation to "
-                "cancel. If you booked by phone or on an earlier visit, call us "
-                "on (503) 555-0142 with the patient's name and we'll take care "
-                "of it."
+                "No problem - nothing has been booked, so there's nothing to "
+                "cancel. If you'd like to arrange something another time, just "
+                "tell me a day and I'll sort it out."
             ),
             agent=AGENT_NAME,
             success=True,

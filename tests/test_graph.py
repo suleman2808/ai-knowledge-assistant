@@ -332,3 +332,73 @@ def test_graph_has_the_expected_shape() -> None:
     mermaid = build_graph().get_graph().draw_mermaid()
     assert "router" in mermaid
     assert "finalise" in mermaid
+
+
+# ---------------------------------------------------------------------------
+# Asking for a human
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "can i talk with a human also how much is a full blood count?",
+        "I want to speak to someone",
+        "put me through to a person",
+        "can I talk to a receptionist please",
+        "I want a real person, not a bot",
+    ],
+)
+def test_asking_for_a_human_is_recognised(message: str) -> None:
+    from app.graph.build import wants_a_person
+
+    assert wants_a_person(message) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "how much is a full blood count?",
+        # "human" and "someone" appear in plenty of ordinary questions.
+        "do you have human growth hormone tests?",
+        "can someone tell me the price",
+        "who are your staff?",
+    ],
+)
+def test_ordinary_questions_are_not_handoff_requests(message: str) -> None:
+    from app.graph.build import wants_a_person
+
+    assert wants_a_person(message) is False
+
+
+def test_a_request_for_a_human_is_answered_alongside_the_question() -> None:
+    """The bug: asked two things, it answered the price and ignored the
+    request for a person entirely, which reads as a company hiding behind
+    a robot."""
+    from app.graph.build import PHONE, finalise
+
+    state = {
+        "message": "can i talk with a human also how much is a full blood count?",
+        "answer": "The full blood count costs $45.",
+        "intent": "inquiry",
+        "success": True,
+    }
+
+    turn = finalise(state)["turn"]
+
+    assert "$45" in turn["answer"]
+    assert PHONE in turn["answer"]
+    assert turn["agent_metadata"]["asked_for_a_person"] is True
+
+
+def test_an_answer_that_already_offers_the_phone_is_not_repeated() -> None:
+    from app.graph.build import PHONE, finalise
+
+    state = {
+        "message": "can I speak to a person",
+        "answer": f"Of course - call us on {PHONE} and we'll help.",
+        "intent": "other",
+        "success": True,
+    }
+
+    assert finalise(state)["turn"]["answer"].count(PHONE) == 1

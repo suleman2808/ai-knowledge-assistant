@@ -82,6 +82,56 @@ OUT_OF_SCOPE = (
 # What to append when a second intent was present but not acted on. These
 # offer rather than assert: the secondary genuinely has not been handled,
 # and claiming otherwise would be a lie the patient discovers later.
+# Asking for a person is not a question about the laboratory, so no
+# agent owns it and the router has nowhere to put it. Left alone, the
+# assistant answers whatever else was in the message and ignores the
+# request entirely - which is the worst thing a customer-facing system
+# can do, and exactly what it did when asked "can I talk with a human
+# also how much is a full blood count".
+#
+# Matched in code rather than by the model: wanting a person is not a
+# judgement call, and the cost of missing it is someone deciding the
+# company is hiding behind a robot.
+# Phrases rather than a pattern: these are the things people actually
+# type, they are readable by whoever maintains this, and there is no
+# clever matching to get wrong.
+_PERSON_WORDS = (
+    "human", "person", "someone", "somebody", "a real agent",
+    "receptionist", "staff member", "advisor", "adviser",
+)
+_REACH_VERBS = (
+    "talk to", "talk with", "speak to", "speak with", "chat to", "chat with",
+    "connect me to", "connect me with", "put me through to", "transfer me to",
+    "pass me to", "get me",
+)
+
+
+def wants_a_person(message: str) -> bool:
+    """Whether the message asks to be put in touch with a human being."""
+    text = " ".join(message.lower().split())
+
+    if any(f"{verb} a {word}" in text or f"{verb} an {word}" in text
+           or f"{verb} the {word}" in text or f"{verb} {word}" in text
+           for verb in _REACH_VERBS for word in _PERSON_WORDS):
+        return True
+
+    return any(
+        phrase in text
+        for phrase in (
+            "real person", "actual person", "a human please",
+            "human instead", "not a bot", "not a robot",
+            "is there anyone i can", "can i call someone",
+        )
+    )
+
+
+PERSON_NOTE = (
+    "\n\nAnd yes - you can always speak to someone. Call us on (503) 555-0142 "
+    "during collection hours and a member of the team will help you directly."
+)
+
+PHONE = "(503) 555-0142"
+
 HANDOFF_NOTES = {
     "complaint": (
         "\n\nYou also mentioned something that went wrong. I haven't logged "
@@ -287,6 +337,14 @@ def finalise(state: AssistantState) -> dict[str, Any]:
     if secondary and state.get("success", True) and secondary in HANDOFF_NOTES:
         answer = f"{answer}{HANDOFF_NOTES[secondary]}"
 
+    # Appended rather than substituted: the message usually carries a real
+    # question alongside the request, and answering it and offering the
+    # phone number are both right. Skipped when the answer already gives
+    # the number, which the refusals and the complaint replies do.
+    asked_for_a_person = wants_a_person(state.get("message", ""))
+    if asked_for_a_person and PHONE not in answer:
+        answer = f"{answer}{PERSON_NOTE}"
+
     turn = {
         "session_id": state.get("session_id", ""),
         "message": state.get("message", ""),
@@ -300,7 +358,12 @@ def finalise(state: AssistantState) -> dict[str, Any]:
         "success": state.get("success", True),
         "needs_followup": state.get("needs_followup", False),
         "sources": state.get("sources", []),
-        "agent_metadata": state.get("agent_metadata", {}),
+        "agent_metadata": {
+            **state.get("agent_metadata", {}),
+            # Worth seeing on the dashboard: a run of these is the
+            # assistant failing at something, not patients being odd.
+            **({"asked_for_a_person": True} if asked_for_a_person else {}),
+        },
     }
 
     return {"answer": answer, "turn": turn}
