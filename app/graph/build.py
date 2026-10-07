@@ -189,6 +189,39 @@ HANDOFF_NOTES = {
 }
 
 
+# Things a patient could actually be asking the laboratory about. Used
+# to decide whether a secondary "inquiry" is a real second question.
+_INQUIRY_SUBJECTS = (
+    "price", "prices", "cost", "costs", "charge", "fee", "how much",
+    "hour", "hours", "open", "opening", "closed", "branch", "branches",
+    "address", "where are", "parking", "test", "tests", "panel", "profile",
+    "result", "results", "report", "reports", "turnaround", "ready",
+    "prepare", "preparation", "fast", "fasting", "eat", "drink",
+    "insurance", "referral", "policy", "appointment", "booking",
+)
+
+
+def _is_a_real_second_question(message: str) -> bool:
+    """Whether a secondary `inquiry` is a question or just an outburst.
+
+    "My last blood test gave me a skin burn, what are you guys even doing
+    with people?" is one complaint, not a complaint plus a question - but
+    it ends in a question mark and the router flags the second intent. The
+    note then told someone who had just been hurt to ask their other
+    question again, which there wasn't one of.
+
+    Only the question itself is examined, not the whole message: the
+    complaint names a blood test, and matching on that would call every
+    angry sentence a second question.
+    """
+    # The trailing "?" leaves an empty final segment, so take the last
+    # one with words in it.
+    clauses = [c for c in re.split(r"[.!?;,]", message) if c.strip()]
+    clause = clauses[-1] if clauses else message
+    text = " ".join(clause.lower().split())
+    return any(subject in text for subject in _INQUIRY_SUBJECTS)
+
+
 def _apply(state: AssistantState, response: AgentResponse) -> dict[str, Any]:
     """Convert an `AgentResponse` into a state update."""
     return {
@@ -504,7 +537,12 @@ def finalise(state: AssistantState) -> dict[str, Any]:
     # Only offer the note when the primary agent actually finished. Adding
     # "you also mentioned a complaint" underneath "I couldn't reach my
     # language service" would be absurd.
-    if secondary and state.get("success", True) and secondary in HANDOFF_NOTES:
+    offer_handoff = bool(secondary) and state.get("success", True)
+    if secondary == "inquiry":
+        offer_handoff = offer_handoff and _is_a_real_second_question(
+            state.get("message", "")
+        )
+    if offer_handoff and secondary in HANDOFF_NOTES:
         answer = f"{answer}{HANDOFF_NOTES[secondary]}"
 
     # Appended rather than substituted: the message usually carries a real

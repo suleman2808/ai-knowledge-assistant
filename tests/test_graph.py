@@ -512,3 +512,56 @@ def test_the_refusals_do_not_claim_anything_about_the_business() -> None:
         assert not clock_times.search(message), "a refusal states a time"
         assert not prices.search(message), "a refusal quotes a price"
         assert "(503) 555-0142" in message, "a refusal leaves nowhere to go"
+
+
+# ---------------------------------------------------------------------------
+# The secondary-intent note
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        # Reported: a complaint about a skin burn, answered well, and then
+        # told to ask their other question again. There wasn't one.
+        "my last blood test made me skin burn issue, what are you guys even doing with people?",
+        "this is unacceptable, what kind of place is this?",
+        "do you people even care?",
+    ],
+)
+def test_an_angry_question_is_not_a_second_question(message: str) -> None:
+    from app.graph.build import _is_a_real_second_question
+
+    assert _is_a_real_second_question(message) is False
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "I waited 40 minutes and nobody apologised. how much is a lipid profile anyway?",
+        "the receptionist was rude. also what time do you open on saturday?",
+        "my report is late and I am furious, when will results be ready?",
+    ],
+)
+def test_a_genuine_second_question_still_gets_the_offer(message: str) -> None:
+    from app.graph.build import _is_a_real_second_question
+
+    assert _is_a_real_second_question(message) is True
+
+
+def test_a_complaint_with_a_rhetorical_question_ends_with_the_reference() -> None:
+    """The reply should finish on what was done about it, not on homework."""
+    from app.graph.build import finalise
+
+    turn = finalise(
+        {
+            "message": "my blood test burned my skin, what are you guys doing with people?",
+            "answer": "I'm sorry. Your reference is CMP-20261007-B9AC.",
+            "intent": "complaint",
+            "secondary_intent": "inquiry",
+            "success": True,
+        }
+    )["turn"]
+
+    assert "ask me again on its own" not in turn["answer"]
+    assert turn["answer"].rstrip().endswith("CMP-20261007-B9AC.")
