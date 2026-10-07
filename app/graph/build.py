@@ -72,11 +72,26 @@ FAREWELL = (
     "call the laboratory on (503) 555-0142."
 )
 
+# Said to someone who asked about something the laboratory has nothing
+# to do with. The first version opened by telling them they were wrong
+# ("that's outside what I can help with") and then listed what the
+# assistant does, which reads as a bouncer reciting a door policy.
+#
+# A receptionist declines by being useful: acknowledge the question,
+# explain the boundary once in terms of the business rather than the
+# software, and leave the person with somewhere to go. The phone number
+# is there because a real one is the only thing that helps when the
+# assistant cannot.
 OUT_OF_SCOPE = (
-    "That's outside what I can help with, I'm afraid - I only handle things "
-    "to do with Riverbend Diagnostics. I can answer questions about our "
-    "services, prices, hours and policies, book an appointment, or pass on a "
-    "complaint."
+    "I'm sorry, that one's outside what I can help with - I only deal with"
+    " Riverbend Diagnostics and our laboratory services, so I'd only be"
+    " guessing, and I'd rather not.\n\n"
+    "What I can do is answer questions about our tests and prices, what to"
+    " do before an appointment, when results are ready, our branches and"
+    " opening hours, or our policies. I can also book you a collection, or"
+    " pass a complaint to our practice manager.\n\n"
+    "If it's something else entirely, our team on (503) 555-0142 will"
+    " happily point you in the right direction."
 )
 
 # What to append when a second intent was present but not acted on. These

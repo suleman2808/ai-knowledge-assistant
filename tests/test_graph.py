@@ -484,3 +484,31 @@ def test_with_nothing_on_file_it_says_so_plainly() -> None:
     )
 
     assert "haven't given me" in answer
+
+
+def test_the_refusals_do_not_claim_anything_about_the_business() -> None:
+    """A refusal that invents an opening time to sound helpful is the exact
+    failure this project exists to prevent. A first draft of one of these
+    said the phone line was staffed "Monday to Friday from 6:30 am", which
+    no document says.
+
+    The phone number is the one exception: it is the laboratory's own,
+    written in the documents, and a refusal without it leaves the patient
+    nowhere to go.
+    """
+    import re
+
+    from app.agents.inquiry import NO_ANSWER
+    from app.graph.build import OUT_OF_SCOPE
+
+    weekdays = re.compile(
+        r"monday|tuesday|wednesday|thursday|friday|saturday|sunday", re.I
+    )
+    clock_times = re.compile(r"\d{1,2}(?::\d{2})?\s*(?:am|pm)", re.I)
+    prices = re.compile(r"[$£€]\s*\d", re.I)
+
+    for message in (NO_ANSWER, OUT_OF_SCOPE):
+        assert not weekdays.search(message), "a refusal names a day"
+        assert not clock_times.search(message), "a refusal states a time"
+        assert not prices.search(message), "a refusal quotes a price"
+        assert "(503) 555-0142" in message, "a refusal leaves nowhere to go"

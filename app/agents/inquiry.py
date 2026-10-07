@@ -42,10 +42,19 @@ INSUFFICIENT = "INSUFFICIENT_CONTEXT"
 # Shown when we have nothing solid to answer from. Deliberately specific:
 # it names the limitation, offers a real alternative, and does not
 # pretend the question was unreasonable.
+# Said when retrieval finds nothing solid. It covers two situations -
+# a fair question about this laboratory that the documents happen not
+# to answer, and a question about something else that the router sent
+# here anyway - so it cannot presume which. An earlier draft said "that's
+# a fair question... something that affects your care", which reads
+# oddly in reply to someone asking about a cinema.
 NO_ANSWER = (
-    "I don't have that in the laboratory's information, so I'd rather not guess. "
-    "Please call us on (503) 555-0142 and the team can answer properly - or "
-    "ask me something else about our services, hours, policies or treatments."
+    "I can't find that in the laboratory's information, so I'd rather not"
+    " guess at it.\n\n"
+    "The team on (503) 555-0142 can help with anything I can't. In the"
+    " meantime I'm happy to answer questions about our tests and prices,"
+    " how to prepare for an appointment, or when results are ready - and I"
+    " can book you in whenever suits you."
 )
 
 NOT_INGESTED = (
