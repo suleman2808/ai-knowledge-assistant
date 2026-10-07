@@ -112,6 +112,14 @@ Google Calendar is **optional** — see below. Without it the Booking Agent
 uses an in-memory calendar that enforces real clash detection, so a fresh
 clone works end to end with nothing but a Groq key.
 
+## Diagrams
+
+| | |
+| --- | --- |
+| [Request flow](docs/architecture.md) | The graph itself, generated from the compiled `StateGraph` so it cannot drift |
+| [Retrieval and grounding](docs/diagrams.md#retrieval-and-grounding) | The two gates that stop an ungrounded answer |
+| [Analytics schema](docs/diagrams.md#analytics-schema) | The five tables, and why complaints are keyed differently |
+
 ## Stack
 
 | | |

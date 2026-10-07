@@ -45,6 +45,10 @@ FOOTER = """```
 
 Every path converges on `finalise`, so logging happens in one place
 rather than at five call sites.
+
+Two views this diagram does not show - what happens inside the Inquiry
+Agent, and what the analytics database holds - are in
+[diagrams.md](diagrams.md).
 """
 
 
