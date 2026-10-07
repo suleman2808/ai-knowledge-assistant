@@ -281,6 +281,9 @@ td {
 }
 tr:last-child td { border-bottom: 0; }
 tr.clickable { cursor: pointer; }
+/* A called-back row stays on the list as a record, but should not look
+   like outstanding work. */
+tr.done td { opacity: .55; }
 tr.clickable:hover td { background: var(--brand-soft); }
 td time, .num-cell { font-variant-numeric: tabular-nums; }
 

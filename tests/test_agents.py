@@ -634,6 +634,19 @@ def test_the_reply_only_claims_an_email_that_was_actually_sent(
 # ---------------------------------------------------------------------------
 
 
+def _a_weekday_soon() -> str:
+    """A bookable date a few days out, as an ISO string.
+
+    Written rather than hard-coded: a fixed date in a booking test passes
+    until the morning it goes past, and then fails for a reason that has
+    nothing to do with the code under test.
+    """
+    day = date.today() + timedelta(days=3)
+    while day.weekday() >= 5:  # the laboratory's weekend hours differ
+        day += timedelta(days=1)
+    return day.isoformat()
+
+
 @pytest.mark.parametrize(
     "message",
     [
@@ -679,7 +692,7 @@ def test_cancelling_removes_the_appointment_from_the_calendar(
 
     calendar = InMemoryCalendar(appointments=[])
     booked = handle_booking(
-        "book a blood test on 2026-10-06 at 9am, Sarah Chen, 503-555-0180",
+        f"book a blood test on {_a_weekday_soon()} at 9am, Sarah Chen, 503-555-0180",
         backend=calendar,
         session_id="s1",
     )
@@ -782,7 +795,7 @@ def test_a_soft_no_after_a_confirmed_booking_keeps_the_appointment(
 
     calendar = InMemoryCalendar(appointments=[])
     booked = handle_booking(
-        "book a blood test on 2026-10-06 at 9am, Sarah Chen, 503-555-0180",
+        f"book a blood test on {_a_weekday_soon()} at 9am, Sarah Chen, 503-555-0180",
         backend=calendar,
         session_id="s-keep",
     )

@@ -121,27 +121,36 @@ def wants_a_person(message: str) -> bool:
             "real person", "actual person", "a human please",
             "human instead", "not a bot", "not a robot",
             "is there anyone i can", "can i call someone",
+            # Said without a verb at all, which is how most people ask.
+            "want a human", "want a person", "want someone",
+            "need a human", "need a person", "need someone",
+            "call me back", "ring me back", "have someone call",
+            "someone call me", "get a human", "get a person",
         )
     )
 
 
-def _person_note(name: str, phone: str) -> str:
+def _person_note(name: str, phone: str, *, standalone: bool = False) -> str:
     """What to say to someone who has asked for a human.
 
     With a number on file this is a promise, so it is only made when
     the request has actually been written to the callback list - the
     staff see it, or the assistant does not say it.
+
+    `standalone` is for a message that was only the request: it is the
+    whole answer then, and an answer should not open with "And yes".
     """
+    opening = "Of course - " if standalone else "\n\nAnd yes - "
     if phone:
         who = f", {name.split()[0]}" if name else ""
         return (
-            f"\n\nAnd yes - you can speak to a person{who}. I have put you"
-            f" on the team's callback list and they will ring you on {phone},"
+            f"{opening}you can speak to a person{who}. I have put you on"
+            f" the team's callback list and they will ring you on {phone},"
             " usually within one working day. If it is urgent, call us on"
             " (503) 555-0142 and someone will pick up during collection hours."
         )
     return (
-        "\n\nAnd yes - you can always speak to someone. Call us on"
+        f"{opening}you can always speak to someone. Call us on"
         " (503) 555-0142 during collection hours, or give me a number and"
         " I will ask the team to ring you back."
     )
@@ -355,7 +364,14 @@ def other_node(state: AssistantState) -> dict[str, Any]:
 
     patient = state.get("patient")
 
-    if "own details" in reason:
+    if "asking for a person" in reason:
+        # The whole message was the request, so it is the answer - not a
+        # note stapled to "that's outside what I can help with", which is
+        # what it used to get.
+        kind = "person"
+        name, phone = _contact_on_file(state)
+        answer = _person_note(name, phone, standalone=True)
+    elif "own details" in reason:
         kind = "own_details"
         answer = _own_details_answer(state)
     elif routed_by == "keyword":
@@ -485,7 +501,10 @@ def finalise(state: AssistantState) -> dict[str, Any]:
     if asked_for_a_person:
         name, phone = _contact_on_file(state)
         callback_logged = _request_callback(state, name, phone)
-        if PHONE not in answer or phone:
+        # The `other` node answers a bare request itself, and several
+        # refusals already give the number. Offering again would read as
+        # the assistant not listening to itself.
+        if "callback list" not in answer and PHONE not in answer:
             answer = f"{answer}{_person_note(name, phone)}"
 
     turn = {

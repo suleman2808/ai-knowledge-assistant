@@ -189,6 +189,30 @@ const views = {
     );
   },
 
+  async callbacks() {
+    const rows = await api('/api/admin/callbacks');
+    if (!rows.length) return empty('Nobody is waiting for a call back.');
+
+    // Outstanding first and oldest at the top: this is a to-do list, and
+    // the person who has been waiting longest should be at the top of it.
+    const body = rows.map((r) => `
+      <tr class="${r.handled_at ? 'done' : ''}">
+        <td>${when(r.created_at)}</td>
+        <td>${escapeHtml(r.patient_name) || '-'}</td>
+        <td>${r.phone ? `<code>${escapeHtml(r.phone)}</code>` : '<span class="pill warn">no number</span>'}</td>
+        <td>${escapeHtml(r.context) || '-'}</td>
+        <td>${r.handled_at
+          ? `<span class="pill grey">called ${when(r.handled_at)}</span>`
+          : `<button class="ghost" data-callback="${r.id}">Mark called</button>`}</td>
+      </tr>`);
+
+    return `
+      <p class="note">Customers who asked to speak to a person. The assistant
+      told them the team would ring, so these are promises the practice has
+      already made.</p>
+      ${table(['Asked', 'Name', 'Phone', 'What about', ''], body)}`;
+  },
+
   async customers() {
     const rows = await api('/api/admin/customers');
     if (!rows.length) return empty('No returning customers yet.');
@@ -274,6 +298,20 @@ async function render(name) {
   }
   for (const row of view.querySelectorAll('tr[data-session]')) {
     row.addEventListener('click', () => showConversation(row.dataset.session));
+  }
+  for (const button of view.querySelectorAll('button[data-callback]')) {
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await api(`/api/admin/callbacks/${button.dataset.callback}/handled`, {
+          method: 'POST',
+        });
+        render('callbacks');
+      } catch (e) {
+        button.disabled = false;
+        button.textContent = e.message;
+      }
+    });
   }
 }
 

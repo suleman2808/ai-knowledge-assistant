@@ -672,6 +672,16 @@ def callbacks(*, limit: int = 100, path: Path | None = None) -> list[dict[str, A
     return [dict(r) for r in rows]
 
 
+def mark_callback_handled(callback_id: int, *, path: Path | None = None) -> bool:
+    """Tick a callback off the list. Returns False if it was already done."""
+    with connect(path) as c:
+        changed = c.execute(
+            "UPDATE callbacks SET handled_at = ? WHERE id = ? AND handled_at = ''",
+            (datetime.now().isoformat(timespec="seconds"), callback_id),
+        ).rowcount
+    return bool(changed)
+
+
 def latest_booking(session_id: str, *, path: Path | None = None) -> dict[str, Any] | None:
     """The most recent appointment still standing in this conversation.
 

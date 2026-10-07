@@ -296,3 +296,113 @@ def test_the_ui_is_served_with_no_cache(client: TestClient) -> None:
     """
     for path in ("/", "/admin", "/analytics", "/static/app.js", "/static/styles.css"):
         assert client.get(path).headers["cache-control"] == "no-cache", path
+
+
+# ---------------------------------------------------------------------------
+# Callbacks
+# ---------------------------------------------------------------------------
+
+
+def test_callbacks_need_a_session_too(client: TestClient) -> None:
+    """It is a list of names and phone numbers, like every other view here."""
+    assert client.get("/api/admin/callbacks").status_code == 401
+    assert client.post("/api/admin/callbacks/1/handled").status_code == 401
+
+
+def test_a_request_for_a_person_appears_on_the_list(client: TestClient) -> None:
+    from app.graph.build import finalise
+
+    finalise(
+        {
+            "message": "can I talk to a human about my results",
+            "answer": "Of course.",
+            "intent": "inquiry",
+            "session_id": "wants-a-human",
+            "success": True,
+            "patient": {"name": "Sam Reed", "phone": "5035550122"},
+        }
+    )
+    sign_in(client)
+
+    rows = client.get("/api/admin/callbacks").json()
+
+    assert any(r["session_id"] == "wants-a-human" for r in rows)
+    row = next(r for r in rows if r["session_id"] == "wants-a-human")
+    assert row["patient_name"] == "Sam Reed"
+    assert row["handled_at"] == ""
+
+
+def test_asking_twice_does_not_make_two_rows(client: TestClient) -> None:
+    """One person wants one call. A list with duplicates stops being read."""
+    from app.graph.build import finalise
+
+    for _ in range(3):
+        finalise(
+            {
+                "message": "I want to speak to someone",
+                "answer": "Of course.",
+                "intent": "other",
+                "session_id": "asked-thrice",
+                "success": True,
+            }
+        )
+    sign_in(client)
+
+    rows = client.get("/api/admin/callbacks").json()
+
+    assert len([r for r in rows if r["session_id"] == "asked-thrice"]) == 1
+
+
+def test_a_callback_can_be_ticked_off(client: TestClient) -> None:
+    from app.graph.build import finalise
+
+    finalise(
+        {
+            "message": "can I talk to a person",
+            "answer": "Of course.",
+            "intent": "other",
+            "session_id": "to-be-called",
+            "success": True,
+        }
+    )
+    sign_in(client)
+    row = next(
+        r for r in client.get("/api/admin/callbacks").json()
+        if r["session_id"] == "to-be-called"
+    )
+
+    assert client.post(f"/api/admin/callbacks/{row['id']}/handled").status_code == 200
+
+    done = next(
+        r for r in client.get("/api/admin/callbacks").json() if r["id"] == row["id"]
+    )
+    assert done["handled_at"] != ""
+    # Already done, so there is nothing left to tick.
+    assert client.post(f"/api/admin/callbacks/{row['id']}/handled").status_code == 404
+
+
+def test_the_phone_number_on_a_callback_is_not_redacted(client: TestClient) -> None:
+    """Analytics redacts numbers out of free text. This list exists to be
+    dialled, so the number is a field, not prose - but the context it was
+    asked in is still redacted."""
+    from app.graph.build import finalise
+
+    finalise(
+        {
+            "message": "call me on 503-555-0199 please, I want a human",
+            "answer": "Of course.",
+            "intent": "other",
+            "session_id": "dial-me",
+            "success": True,
+            "patient": {"name": "Mia Clarke", "phone": "5035550199"},
+        }
+    )
+    sign_in(client)
+
+    row = next(
+        r for r in client.get("/api/admin/callbacks").json()
+        if r["session_id"] == "dial-me"
+    )
+
+    assert row["phone"] == "(503) 555-0199"
+    assert "503-555-0199" not in row["context"]

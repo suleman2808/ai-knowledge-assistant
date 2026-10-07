@@ -369,6 +369,12 @@ def _retry_as_parts(
     if not parts:
         return None
 
+    from app.graph.build import wants_a_person
+
+    parts = [part for part in parts if not wants_a_person(part)]
+    if not parts:
+        return None
+
     answers: list[str] = []
     sources: list[dict[str, str | float]] = []
     seen: set[str] = set()

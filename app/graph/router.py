@@ -53,6 +53,10 @@ PLEASANTRIES: dict[str, str] = {
 # Longest pleasantry worth checking. Anything longer has content in it.
 MAX_PLEASANTRY_WORDS = 3
 
+# "I'd like to speak to a human being please" is nine. Longer than this
+# and there is something else in the message worth routing on.
+MAX_PERSON_REQUEST_WORDS = 10
+
 # Questions about the patient's own details. These are not questions
 # about the laboratory, and sending them to the documents produces "I
 # don't have that in the laboratory's information" about a phone number
@@ -95,6 +99,15 @@ def _fast_path(message: str) -> tuple[Intent, str, str] | None:
 
     if _asks_about_their_own_details(message):
         return ("other", "asking about their own details", "own_details")
+
+    # Only when that is the whole message. "Can I talk to a human, and how
+    # much is a full blood count" has a real question in it and belongs
+    # with the Inquiry Agent; the offer is added at the exit node either
+    # way.
+    from app.graph.build import wants_a_person
+
+    if wants_a_person(message) and len(normalised.split()) <= MAX_PERSON_REQUEST_WORDS:
+        return ("other", "asking for a person", "person")
 
     if len(normalised.split()) > MAX_PLEASANTRY_WORDS:
         return None

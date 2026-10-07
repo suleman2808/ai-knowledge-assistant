@@ -452,6 +452,33 @@ def admin_complaints(limit: int = 100) -> Any:
     return complaints(limit=max(1, min(limit, 500)))
 
 
+@app.get("/api/admin/callbacks", tags=["admin"], dependencies=[Depends(require_admin)])
+def admin_callbacks(limit: int = 100) -> Any:
+    """People waiting for a person to ring them back."""
+    from app.integrations.analytics import callbacks
+
+    return callbacks(limit=max(1, min(limit, 500)))
+
+
+@app.post(
+    "/api/admin/callbacks/{callback_id}/handled",
+    tags=["admin"],
+    dependencies=[Depends(require_admin)],
+)
+def admin_callback_handled(callback_id: int) -> Any:
+    """Tick one off, once it has been made.
+
+    A list that cannot be cleared stops being read, and a callback list
+    nobody reads is worse than none: the assistant has promised a call on
+    the practice's behalf.
+    """
+    from app.integrations.analytics import mark_callback_handled
+
+    if not mark_callback_handled(callback_id):
+        raise HTTPException(status_code=404, detail="No outstanding callback with that id.")
+    return {"ok": True}
+
+
 @app.get("/api/admin/customers", tags=["admin"], dependencies=[Depends(require_admin)])
 def admin_customers(limit: int = 100) -> Any:
     from app.integrations.analytics import customers
