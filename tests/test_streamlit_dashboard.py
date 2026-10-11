@@ -4,6 +4,12 @@ Driven by Streamlit's own `AppTest`, which runs the page headlessly and
 exposes the elements it produced. That is worth more than a browser
 check here: the page is mostly conditional rendering, and the condition
 that matters most is whether someone is signed in.
+
+Typing and submitting happen in a single `run()`. Inside an `st.form`
+nothing is committed until the submit button is pressed, so a `run()`
+between the two throws the typed value away - which is what Streamlit
+1.65 started doing, and it turned CI red while every laptop still had
+1.64 installed.
 """
 
 from __future__ import annotations
@@ -79,7 +85,7 @@ def test_the_dashboard_is_closed_until_you_sign_in() -> None:
 
 def test_the_wrong_password_does_not_open_it() -> None:
     app = page()
-    app.text_input[0].set_value("not the password").run()
+    app.text_input[0].set_value("not the password")
     app.button[0].click().run()
 
     assert app.session_state.get("admin_ok") is not True
@@ -88,7 +94,7 @@ def test_the_wrong_password_does_not_open_it() -> None:
 
 def test_the_right_password_opens_it() -> None:
     app = page()
-    app.text_input[0].set_value(PASSWORD).run()
+    app.text_input[0].set_value(PASSWORD)
     app.button[0].click().run()
 
     assert app.session_state["admin_ok"] is True
@@ -96,7 +102,7 @@ def test_the_right_password_opens_it() -> None:
 
 def test_a_failed_attempt_is_counted() -> None:
     app = page()
-    app.text_input[0].set_value("wrong").run()
+    app.text_input[0].set_value("wrong")
     app.button[0].click().run()
 
     assert app.session_state["admin_attempts"] == 1
