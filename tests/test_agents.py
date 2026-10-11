@@ -689,10 +689,15 @@ def test_cancelling_removes_the_appointment_from_the_calendar(
     from app.agents.booking import handle_booking
 
     monkeypatch.setattr(settings, "analytics_db", tmp_path / "analytics.db")
+    stub_extraction(
+        monkeypatch,
+        {"service": "blood test", "date": _a_weekday_soon(), "time": "09:00",
+         "time_preference": None, "patient_name": "Sarah Chen", "phone": "503-555-0180"},
+    )
 
     calendar = InMemoryCalendar(appointments=[])
     booked = handle_booking(
-        f"book a blood test on {_a_weekday_soon()} at 9am, Sarah Chen, 503-555-0180",
+        "book a blood test, Sarah Chen, 503-555-0180",
         backend=calendar,
         session_id="s1",
     )
@@ -792,10 +797,15 @@ def test_a_soft_no_after_a_confirmed_booking_keeps_the_appointment(
     """"Leave it" with an appointment on the books means leave it alone.
     Reading it as a cancellation would lose someone their slot."""
     monkeypatch.setattr(settings, "analytics_db", tmp_path / "analytics.db")
+    stub_extraction(
+        monkeypatch,
+        {"service": "blood test", "date": _a_weekday_soon(), "time": "09:00",
+         "time_preference": None, "patient_name": "Sarah Chen", "phone": "503-555-0180"},
+    )
 
     calendar = InMemoryCalendar(appointments=[])
     booked = handle_booking(
-        f"book a blood test on {_a_weekday_soon()} at 9am, Sarah Chen, 503-555-0180",
+        "book a blood test, Sarah Chen, 503-555-0180",
         backend=calendar,
         session_id="s-keep",
     )
