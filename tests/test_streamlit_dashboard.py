@@ -222,3 +222,42 @@ def test_the_page_does_not_use_pandas_backed_widgets() -> None:
 
     for widget in ("st.dataframe(", "st.bar_chart(", "st.table("):
         assert widget not in code
+
+
+# ---------------------------------------------------------------------------
+# Keeping the two front-ends saying the same thing
+# ---------------------------------------------------------------------------
+
+
+def test_the_streamlit_pages_match_the_house_style() -> None:
+    """The Streamlit front-end drifted from the chat UI without anyone
+    noticing, because it is a separate file that nothing imports from the
+    other one. The live demo still said "Hello —" and offered four
+    suggestions weeks after the chat page had been changed.
+
+    This checks the one rule that is mechanical enough to check.
+    """
+    import re
+
+    for name in ("streamlit_app.py", "pages/Admin_dashboard.py"):
+        source = (PROJECT_ROOT / name).read_text(encoding="utf-8")
+        # Strip the module docstring: it is prose for developers, and it
+        # keeps its punctuation.
+        body = re.sub(r'^\s*(""".*?""")', "", source, count=1, flags=re.S)
+        offenders = [
+            line.strip()
+            for line in body.splitlines()
+            if "\u2014" in line and not line.strip().startswith("#")
+        ]
+        assert not offenders, f"{name} has long dashes in user-facing text: {offenders}"
+
+
+def test_both_front_ends_offer_the_same_questions() -> None:
+    """The two suggestions that demonstrate the refusals are the point of
+    the demo. They were in the chat UI and missing from the live one."""
+    chat = (PROJECT_ROOT / "ui" / "index.html").read_text(encoding="utf-8")
+    streamlit = (PROJECT_ROOT / "streamlit_app.py").read_text(encoding="utf-8")
+
+    for question in ("My haemoglobin is 9.2, is that bad?", "Do you do allergy testing?"):
+        assert question in chat, f"{question!r} missing from the chat UI"
+        assert question in streamlit, f"{question!r} missing from the Streamlit app"

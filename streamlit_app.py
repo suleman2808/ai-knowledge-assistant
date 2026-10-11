@@ -26,7 +26,7 @@ import os
 import streamlit as st
 
 st.set_page_config(
-    page_title="Riverbend Diagnostics — Assistant",
+    page_title="Riverbend Diagnostics - AI Assistant",
     page_icon="🔬",
     layout="centered",
 )
@@ -65,7 +65,7 @@ INTENT_LABELS = {
 }
 
 GREETING = (
-    "Hello — I'm the assistant for Riverbend Diagnostics. I can answer "
+    "Hello, I'm the assistant for Riverbend Diagnostics. I can answer "
     "questions about our services, prices, hours and policies, book you an "
     "appointment, or pass on a complaint. What can I help with?"
 )
@@ -121,8 +121,9 @@ def render_sources(turn: dict) -> None:
 def main() -> None:
     st.title("🔬 Riverbend Diagnostics")
     st.caption(
-        "Hawthorne · Beaverton · Gresham · (503) 555-0142 — an AI assistant "
-        "that answers only from the laboratory's own documents."
+        "AI Assistant · Hawthorne · Beaverton · Gresham · (503) 555-0142. "
+        "It answers only from the laboratory's own documents, and will not "
+        "interpret a result."
     )
 
     if not settings.llm_configured:
@@ -138,15 +139,30 @@ def main() -> None:
         st.stop()
 
     with st.sidebar:
+        st.subheader("About this demo")
+        st.caption(
+            "A customer-facing assistant built around one rule: it answers "
+            "from the laboratory's own documents, or it says it cannot. A "
+            "router reads each message and hands it to one of three "
+            "specialists - information, appointments, complaints."
+        )
+
         st.subheader("Try asking")
         for suggestion in (
             "How much is a full blood count?",
             "Do I need to fast for a lipid profile?",
+            "Book a blood test next Tuesday at 8am",
             "When will my report be ready?",
-            "I waited 40 minutes and nobody apologised",
+            "My haemoglobin is 9.2, is that bad?",
+            "Do you do allergy testing?",
         ):
             if st.button(suggestion, use_container_width=True):
                 st.session_state.pending = suggestion
+
+        st.caption(
+            "The last two are the interesting ones - it declines to interpret "
+            "a result, and declines a service the documents do not cover."
+        )
 
         st.divider()
         st.caption(
@@ -188,7 +204,7 @@ def main() -> None:
             st.markdown(turn.get("answer", ""))
             render_sources(turn)
 
-    question = st.chat_input("Ask about tests, prices, preparation — or book a collection")
+    question = st.chat_input("Message the assistant...")
     if not question:
         question = st.session_state.pop("pending", None)
     if not question:

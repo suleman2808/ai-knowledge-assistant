@@ -37,7 +37,7 @@ import os
 
 import streamlit as st
 
-st.set_page_config(page_title="Admin dashboard — Riverbend", page_icon="🔒", layout="wide")
+st.set_page_config(page_title="Admin dashboard - Riverbend", page_icon="🔒", layout="wide")
 
 # Secrets reach the app through st.secrets, not the environment, and
 # app.config reads the environment. Bridge before importing it.
@@ -106,7 +106,7 @@ def table(rows: list[dict[str, object]], columns: dict[str, str]) -> None:
             value = row.get(key)
             if isinstance(value, bool):
                 value = "yes" if value else "no"
-            text = str(value if value not in (None, "") else "—")
+            text = str(value if value not in (None, "") else "-")
             # Escape pipes, or one stray character breaks the whole table.
             cells.append(text.replace("|", r"\|").replace("\n", " "))
         lines.append("| " + " | ".join(cells) + " |")
@@ -141,11 +141,11 @@ def overview() -> None:
         ("Messages", data["turns"]),
         ("Conversations", data["conversations"]),
         ("Answered", f"{inquiries['answer_rate_pct']}%"
-            if inquiries["answer_rate_pct"] is not None else "—"),
+            if inquiries["answer_rate_pct"] is not None else "-"),
         ("Bookings", data["bookings_made"]),
         ("Escalated", data["escalations"]),
         ("Median reply",
-         f"{data['latency_ms']['p50'] / 1000:.1f}s" if data["latency_ms"]["p50"] else "—"),
+         f"{data['latency_ms']['p50'] / 1000:.1f}s" if data["latency_ms"]["p50"] else "-"),
     ]
     for column, (label, value) in zip(columns, figures):
         column.metric(label, value)
@@ -155,13 +155,13 @@ def overview() -> None:
 
     st.subheader("Knowledge gaps")
     st.caption(
-        "Questions the assistant declined — things customers want to know "
+        "Questions the assistant declined, things customers want to know "
         "that the documents do not cover. Each one is a page worth writing."
     )
     if data["knowledge_gaps"]:
         table(data["knowledge_gaps"], {"Question": "question", "Times asked": "times"})
     else:
-        st.success("None — everything asked was answerable from the documents.")
+        st.success("None - everything asked was answerable from the documents.")
 
 
 def conversations() -> None:
@@ -215,11 +215,11 @@ def conversations() -> None:
                 with st.expander(f"Answered from {len(turn['sources'])} section(s)"):
                     for source in turn["sources"]:
                         st.markdown(
-                            f"**{source['breadcrumb']}** — `{source['source']}` "
+                            f"**{source['breadcrumb']}** - `{source['source']}` "
                             f"(similarity {source['score']})"
                         )
             elif turn["grounded"] is False:
-                st.caption("Answered from: nothing — the documents did not cover it.")
+                st.caption("Answered from: nothing - the documents did not cover it.")
 
 
 def records(loader, empty: str, columns: dict[str, str]) -> None:
