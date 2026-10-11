@@ -71,6 +71,115 @@ GREETING = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Making this look like the product
+# ---------------------------------------------------------------------------
+
+# Streamlit's config.toml sets the palette; everything that palette cannot
+# reach is set here. The targets are `data-testid` attributes, which are
+# Streamlit's own public hooks and survive its releases far better than
+# the generated class names do.
+#
+# The aim is not a pixel copy of ui/styles.css - Streamlit owns its
+# layout - but a visitor moving between the two should feel they are
+# looking at one product: same rail, same quiet cards, same rounded
+# composer, same typeface.
+THEME = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --rb-rail:  #171614;
+  --rb-line:  #35332f;
+  --rb-faint: #827d75;
+  --rb-muted: #a39e96;
+  --rb-brand: #6fb3b8;
+}
+
+html, body, [class*="css"], [data-testid="stAppViewContainer"] {
+  font-family: Inter, ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* The rail. Streamlit paints the sidebar in secondaryBackgroundColor,
+   which the chat bubbles also use, so it is darkened here instead. */
+[data-testid="stSidebar"] {
+  background: var(--rb-rail);
+  border-right: 1px solid var(--rb-line);
+}
+[data-testid="stSidebar"] h3 {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--rb-faint) !important;
+  margin-bottom: .4rem;
+}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+  font-size: 12.8px;
+  line-height: 1.55;
+  color: var(--rb-muted);
+}
+
+/* Suggestion buttons, as the quiet cards the rail uses. */
+[data-testid="stSidebar"] .stButton button {
+  text-align: left;
+  justify-content: flex-start;
+  border: 1px solid var(--rb-line);
+  border-radius: 10px;
+  background: #232220;
+  color: var(--rb-muted);
+  font-size: 12.8px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: .55rem .7rem;
+  transition: border-color .15s ease, color .15s ease;
+}
+[data-testid="stSidebar"] .stButton button:hover {
+  border-color: var(--rb-brand);
+  color: var(--rb-brand);
+}
+
+/* Heading and strapline, sized like the chat page rather than a report. */
+[data-testid="stMainBlockContainer"] h1 {
+  font-size: 28px !important;
+  font-weight: 600 !important;
+  letter-spacing: -.02em;
+}
+[data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"] p {
+  font-size: 12.5px;
+  color: var(--rb-faint);
+}
+
+/* The composer: one rounded field with a circular send button. */
+[data-testid="stChatInput"] {
+  border: 1px solid var(--rb-line);
+  border-radius: 24px;
+  background: #232220;
+}
+[data-testid="stChatInput"]:focus-within { border-color: var(--rb-brand); }
+[data-testid="stChatInputSubmitButton"] {
+  border-radius: 50%;
+  background: var(--rb-brand);
+  color: #10262a;
+}
+
+/* Answers read as prose, the patient's words as a card - the same
+   asymmetry the chat page uses. */
+[data-testid="stChatMessage"] { background: transparent; padding-left: 0; }
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+  background: #2b2a27;
+  border: 1px solid #2c2b28;
+  border-radius: 18px 18px 5px 18px;
+  padding: .25rem .9rem;
+}
+
+/* Streamlit's own fork and share chrome is not part of the demo. */
+[data-testid="stToolbarActions"] { display: none; }
+[data-testid="stDecoration"] { display: none; }
+</style>
+"""
+
+
 @st.cache_resource(show_spinner="Preparing the knowledge base…")
 def prepare_knowledge_base() -> dict:
     """Ensure the vector store exists, building it if this is a cold start.
@@ -119,6 +228,7 @@ def render_sources(turn: dict) -> None:
 
 
 def main() -> None:
+    st.markdown(THEME, unsafe_allow_html=True)
     st.title("🔬 Riverbend Diagnostics")
     st.caption(
         "AI Assistant · Hawthorne · Beaverton · Gresham · (503) 555-0142. "

@@ -1,10 +1,16 @@
-# Matches the palette of the FastAPI chat UI in ui/styles.css, so the two
-# front-ends look like the same product.
+# The same palette as the FastAPI chat UI in ui/styles.css, so the two
+# front-ends read as one product rather than two different websites.
+#
+# These are that stylesheet's dark tokens: --bg, --surface, --ink and the
+# dark-mode --brand. The light tokens were here until now, which is why
+# the hosted demo looked nothing like the app it is meant to be showing.
 [theme]
-primaryColor = "#0f5c63"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f4f6f8"
-textColor = "#16232e"
+base = "dark"
+primaryColor = "#6fb3b8"
+backgroundColor = "#1b1a18"
+secondaryBackgroundColor = "#232220"
+textColor = "#ece9e4"
+font = "sans serif"
 
 [browser]
 gatherUsageStats = false
