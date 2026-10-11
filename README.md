@@ -56,26 +56,53 @@ Every turn is recorded, and the analytics dashboard reports what patients
 asked, how often the assistant could answer, and which questions it could
 not — the gaps in the laboratory's own documentation.
 
-```
-                      ┌─────────┐
-   message  ────────▶ │ router  │  keyword fast-path, else small LLM
-                      └────┬────┘
-           ┌───────────┬───┴───────┬───────────┐
-           ▼           ▼           ▼           ▼
-       ┌───────┐  ┌─────────┐ ┌──────────┐ ┌───────┐
-       │booking│  │ inquiry │ │complaint │ │ other │
-       └───┬───┘  └────┬────┘ └────┬─────┘ └───┬───┘
-           └───────────┴─────┬─────┴───────────┘
-                             ▼
-                       ┌──────────┐
-                       │ finalise │  secondary-intent note, turn record
-                       └──────────┘
+```mermaid
+flowchart TD
+    M[Patient message] --> ID[identify<br/><i>phone lookup, no login</i>]
+    ID --> R{router<br/><i>keyword fast-path, else small LLM</i>}
+    R --> B[booking<br/><i>Google Calendar</i>]
+    R --> I[inquiry<br/><i>retrieval, or refusal</i>]
+    R --> C[complaint<br/><i>severity, logged, escalated</i>]
+    R --> O[other<br/><i>greetings, out of scope</i>]
+    B --> F[finalise<br/><i>one exit for every path</i>]
+    I --> F
+    C --> F
+    O --> F
+    F --> OUT[Reply, streamed as it is written]
+    F --> DB[(Analytics<br/>redacted at the write boundary)]
 ```
 
-The diagram above is hand-drawn for readability; the authoritative one is
-generated from the compiled graph in
+Every path converges on `finalise`, which is what lets analytics be
+written in one place instead of at five call sites.
+
+**The refusal is the feature.** Inside the Inquiry Agent, two independent
+gates can stop an answer, and they fail differently on purpose:
+
+```mermaid
+flowchart TD
+    Q[Question] --> V[Dense vectors<br/><i>ChromaDB, MiniLM on ONNX</i>]
+    Q --> K[Keyword search<br/><i>BM25, implemented here</i>]
+    V --> FU[Reciprocal rank fusion<br/><i>k = 60</i>]
+    K --> FU
+    FU --> G1{Gate one<br/>similarity threshold}
+    G1 -- nothing close enough --> D[Decline<br/><i>no model call made</i>]
+    G1 -- passes --> A[Answer from the chunks<br/><i>no other source</i>]
+    A --> G2{Gate two<br/>grounding check}
+    G2 -- INSUFFICIENT_CONTEXT --> D
+    G2 -- grounded --> CIT[Cited answer<br/><i>sources shown on the dashboard</i>]
+```
+
+The first gate is arithmetic on similarity scores and costs nothing. The
+second is the model reading its own context, and costs a call. The second
+exists because the first alone let a question about a cinema's opening
+times through at 0.422 — topically close to a laboratory's opening times,
+and not the same question at all.
+
+The graph above is written by hand for the shop window; the authoritative
+one is generated from the compiled graph in
 [docs/architecture.md](docs/architecture.md), regenerated with
 `python -m scripts.draw_graph --write`, so it cannot drift from the code.
+The database schema is in [docs/diagrams.md](docs/diagrams.md).
 
 ## Quickstart
 
