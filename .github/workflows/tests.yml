@@ -27,11 +27,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Turns each pytest failure into a GitHub annotation, which is
+          # readable on the run page and through the public API. Without
+          # it, diagnosing a red run means being signed in to download
+          # the raw log.
+          pip install pytest-github-actions-annotate-failures
 
       - name: Run tests
         # No API key and no network access are needed: every LLM call,
         # vector store and calendar is stubbed in the suite.
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ -q --tb=short
 
       - name: Check the example env file matches the code
         run: python -m pytest tests/test_config.py -q
