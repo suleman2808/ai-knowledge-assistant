@@ -176,6 +176,48 @@ html, body, [class*="css"], [data-testid="stAppViewContainer"] {
 /* Streamlit's own fork and share chrome is not part of the demo. */
 [data-testid="stToolbarActions"] { display: none; }
 [data-testid="stDecoration"] { display: none; }
+/* Streamlit's own page switcher is replaced by the brand block and the
+   links at the foot of the rail, as the chat page has them. */
+[data-testid="stSidebarNav"] { display: none; }
+
+.rb-brand {
+  display: flex; align-items: center; gap: 11px;
+  padding: 2px 0 14px;
+  border-bottom: 1px solid var(--rb-line);
+  margin-bottom: 14px;
+}
+.rb-mark { flex: 0 0 32px; width: 32px; height: 32px; }
+.rb-mark svg { width: 100%; height: 100%; display: block; }
+.rb-brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+.rb-brand-text strong {
+  font-size: 14.5px; font-weight: 600; color: #ece9e4;
+}
+.rb-brand-text em {
+  font-style: normal; font-size: 12px; color: var(--rb-faint);
+}
+
+/* The header bar: the assistant's name, then where to find the lab. */
+.rb-head { display: flex; flex-direction: column; line-height: 1.3; }
+.rb-head strong { font-size: 15.5px; font-weight: 600; color: #ece9e4; }
+.rb-head span { font-size: 12.5px; color: var(--rb-faint); }
+
+/* "New conversation" is a quiet pill, not a primary action. */
+[data-testid="stMainBlockContainer"] .stButton button {
+  border: 1px solid var(--rb-line);
+  border-radius: 999px;
+  background: #232220;
+  color: var(--rb-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: .3rem .85rem;
+}
+[data-testid="stMainBlockContainer"] .stButton button:hover {
+  border-color: var(--rb-brand); color: var(--rb-brand);
+}
+
+/* The header sits against the top of the page, with a hairline under it
+   like the chat page's. */
+[data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
 </style>
 """
 
@@ -227,14 +269,46 @@ def render_sources(turn: dict) -> None:
                 )
 
 
+BRAND = """
+<div class="rb-brand">
+  <span class="rb-mark">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="9" fill="#6fb3b8"/>
+      <path d="M16 6.5c3.9 4.8 6.1 8.1 6.1 10.8a6.1 6.1 0 0 1-12.2 0c0-2.7 2.2-6 6.1-10.8z" fill="#10262a"/>
+    </svg>
+  </span>
+  <span class="rb-brand-text">
+    <strong>Riverbend Diagnostics</strong>
+    <em>Medical diagnostic laboratory</em>
+  </span>
+</div>
+"""
+
+HEADER = """
+<div class="rb-head">
+  <strong>AI Assistant</strong>
+  <span>Hawthorne &middot; Beaverton &middot; Gresham &middot; (503) 555-0142</span>
+</div>
+"""
+
+
 def main() -> None:
     st.markdown(THEME, unsafe_allow_html=True)
-    st.title("🔬 Riverbend Diagnostics")
-    st.caption(
-        "AI Assistant · Hawthorne · Beaverton · Gresham · (503) 555-0142. "
-        "It answers only from the laboratory's own documents, and will not "
-        "interpret a result."
-    )
+
+    # The brand sits in the rail and the page title in the header bar, as
+    # on the chat page. Streamlit puts a page title in the main column by
+    # default, which is why the two looked unrelated.
+    with st.sidebar:
+        st.markdown(BRAND, unsafe_allow_html=True)
+
+    head, action = st.columns([5, 1.25], vertical_alignment="center")
+    with head:
+        st.markdown(HEADER, unsafe_allow_html=True)
+    with action:
+        if st.button("New conversation", use_container_width=True):
+            for key in ("history", "turns", "pending"):
+                st.session_state.pop(key, None)
+            st.rerun()
 
     if not settings.llm_configured:
         st.error(
