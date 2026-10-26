@@ -261,3 +261,12 @@ def test_both_front_ends_offer_the_same_questions() -> None:
     for question in ("My haemoglobin is 9.2, is that bad?", "Do you do allergy testing?"):
         assert question in chat, f"{question!r} missing from the chat UI"
         assert question in streamlit, f"{question!r} missing from the Streamlit app"
+
+
+def test_the_loading_message_does_not_claim_to_search_documents() -> None:
+    """Shown before anything is known about the message, so a greeting got
+    "Searching the laboratory's documents". It has to stay generic."""
+    source = (PROJECT_ROOT / "streamlit_app.py").read_text(encoding="utf-8")
+
+    assert "st.spinner(" in source
+    assert "Searching the laboratory" not in source

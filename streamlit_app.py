@@ -218,6 +218,84 @@ html, body, [class*="css"], [data-testid="stAppViewContainer"] {
 /* The header sits against the top of the page, with a hairline under it
    like the chat page's. */
 [data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
+/* ---- spacing and alignment fixes ---------------------------------- */
+
+/* The rail started 100px down: a 60px header reserved for the collapse
+   chevron, then 24px of padding, then the brand. The header now takes no
+   room and the chevron floats in the corner. */
+[data-testid="stSidebarHeader"] {
+  height: 0; min-height: 0; padding: 0; overflow: visible;
+}
+[data-testid="stSidebarHeader"] button,
+[data-testid="stSidebarCollapseButton"] {
+  position: absolute; top: 12px; right: 10px; z-index: 2;
+}
+[data-testid="stSidebarUserContent"] { padding-top: 22px !important; }
+
+/* Suggestion text was centred because the button's inner wrappers are
+   flex containers set to `justify-content: center`; setting it on the
+   button alone does nothing. */
+[data-testid="stSidebar"] .stButton button > div,
+[data-testid="stSidebar"] .stButton button > div > span {
+  justify-content: flex-start !important;
+  width: 100%;
+  text-align: left;
+}
+[data-testid="stSidebar"] .stButton button p { text-align: left; }
+
+/* Streamlit's fixed top bar is 60px of empty strip with a background.
+   It is made transparent and click-through so the header row can sit at
+   the top of the page, as on the chat UI; only its own menu stays
+   clickable. Without this the row slid underneath it and was cut off. */
+[data-testid="stHeader"] {
+  background: transparent !important;
+  height: 2.6rem;
+  pointer-events: none;
+}
+/* The toolbar is a 1200px-wide box, so making all of it clickable put it
+   over the "New conversation" pill and swallowed the clicks. Only the
+   buttons inside it take pointer events. */
+[data-testid="stToolbar"] { pointer-events: none; }
+[data-testid="stToolbar"] button,
+[data-testid="stToolbar"] a,
+[data-testid="stMainMenu"],
+[data-testid="stSidebarCollapseButton"] { pointer-events: auto; }
+
+/* The header row: one line, the pill centred against the title. */
+[data-testid="stMainBlockContainer"] { padding-top: 1.6rem !important; }
+.rb-head { margin: 0; }
+.rb-head strong { display: block; }
+/* Streamlit pads every markdown block, so the header's box is taller than
+   the text in it and "centred" came out 8px low against the pill. */
+[data-testid="stElementContainer"]:has(.rb-head),
+[data-testid="stMarkdownContainer"]:has(.rb-head),
+[data-testid="stMarkdown"]:has(.rb-head) { margin: 0 !important; padding: 0 !important; }
+[data-testid="stMainBlockContainer"] .stButton button {
+  min-height: 32px; height: 32px;
+  padding: 0 .9rem;
+  white-space: nowrap;
+}
+[data-testid="stMainBlockContainer"] .stButton button p {
+  white-space: nowrap; overflow: visible; text-overflow: clip;
+}
+
+/* The assistant speaks as the laboratory's drop, as on the chat page;
+   the patient has no avatar at all. */
+[data-testid="stChatMessageAvatarUser"] { display: none; }
+[data-testid="stChatMessageAvatarAssistant"] {
+  background: transparent !important;
+  width: 26px; height: 26px; min-width: 26px;
+  border-radius: 8px;
+  position: relative;
+}
+[data-testid="stChatMessageAvatarAssistant"] > * { display: none !important; }
+[data-testid="stChatMessageAvatarAssistant"]::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--rb-brand);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c5.6 6.9 8.8 11.7 8.8 15.6a8.8 8.8 0 0 1-17.6 0C7.2 14.7 10.4 9.9 16 3z' fill='black'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c5.6 6.9 8.8 11.7 8.8 15.6a8.8 8.8 0 0 1-17.6 0C7.2 14.7 10.4 9.9 16 3z' fill='black'/%3E%3C/svg%3E") center / 16px 16px no-repeat;
+}
 </style>
 """
 
@@ -301,7 +379,7 @@ def main() -> None:
     with st.sidebar:
         st.markdown(BRAND, unsafe_allow_html=True)
 
-    head, action = st.columns([5, 1.25], vertical_alignment="center")
+    head, action = st.columns([3, 1], vertical_alignment="center")
     with head:
         st.markdown(HEADER, unsafe_allow_html=True)
     with action:
@@ -398,7 +476,10 @@ def main() -> None:
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("Searching the laboratory's documents…"):
+        # Generic on purpose. Nothing is known yet about what kind of
+        # message this is: "hi" and "book me a test" both wait here, and
+        # telling a greeting that documents are being searched is wrong.
+        with st.spinner("Generating a response…"):
             try:
                 turn = run(
                     question,

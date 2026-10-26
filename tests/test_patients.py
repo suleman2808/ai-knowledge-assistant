@@ -235,8 +235,15 @@ def test_a_recognised_customer_giving_their_number_is_welcomed() -> None:
     assert result["agent_metadata"]["kind"] == "identified"
 
 
-def test_an_unrecognised_number_is_not_pretended_to_be_known() -> None:
+def test_an_unrecognised_number_is_not_pretended_to_be_known(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.graph.build import other_node
+
+    monkeypatch.setattr(
+        "app.llm.complete_json",
+        lambda *_a, **_k: {"kind": "out_of_scope", "reply": ""},
+    )
 
     result = other_node(
         {"message": "hi, this is 503-555-7777", "routed_by": "llm",

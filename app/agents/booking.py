@@ -335,8 +335,14 @@ def handle_booking(
 
     # Someone backing out mid-booking is not a booking request with
     # details missing, however much it looks like one to an extractor.
-    if _is_deferral(message):
-        return _defer(calendar, session_id)
+    # A bare "no" that has reached this agent cannot be a booking request,
+    # whatever the history looks like: it is an answer to something the
+    # assistant just asked, and the only sensible reading is that they are
+    # leaving. The router only trusts it when a booking question was the
+    # last thing said; here the model has already decided it belongs to
+    # booking, and re-asking for details would be the parroting again.
+    if backs_out(message, booking_in_progress=True):
+        return _defer(calendar, session_id, history)
 
     try:
         extracted = complete_json(
@@ -533,7 +539,22 @@ _DEFERRAL_PHRASES = (
     # is a booking. The day is what tells them apart, and it is checked
     # below rather than guessed at here.
     "some other time", "some other day", "another time", "another day",
+    # Said by someone leaving mid-booking, which is when most people do.
+    "book later", "book it later", "book again later", "do it later",
+    "call later", "call back later", "ring later", "get back to you",
+    "think about it", "let me think", "ill sort it later", "i'll sort it later",
 )
+
+# "Later" also appears in genuine requests: "can I come later in the
+# afternoon" is arranging a time, not leaving. These rule the phrase out.
+_NOT_LEAVING = ("later in the", "later today", "later this", "later tonight",
+                "later than", "any later", "a bit later", "slightly later")
+
+# What a patient says to a question they would rather not answer.
+_SHORT_NOES = {
+    "no", "nah", "nope", "nvm", "no sorry", "nah sorry", "sorry no",
+    "no im ok", "no i'm ok", "actually no", "actually nevermind",
+}
 
 # Weekdays, relative days and clock times. A message carrying one of
 # these is arranging something, whatever else it says.
@@ -560,10 +581,27 @@ def _wants_to_cancel(message: str) -> bool:
     return any(phrase in text for phrase in _CANCEL_PHRASES)
 
 
+def _looks_mid_booking(history: list[dict[str, str]] | None) -> bool:
+    """Whether the assistant's last words were a booking question.
+
+    Read from the text of the last assistant turn, because that is all the
+    history carries: which agent said it is not recorded.
+    """
+    for turn in reversed(history or []):
+        if turn.get("role") != "user":
+            text = (turn.get("content") or "").lower()
+            asks = ("could you tell me", "which day suits", "what time",
+                    "full name", "contact number", "come in for")
+            return "happy to" in text and "book" in text or any(a in text for a in asks)
+    return False
+
+
 def _is_deferral(message: str) -> bool:
     """Whether this message backs out of booking without saying "cancel"."""
     text = " ".join(message.lower().split())
     if any(phrase in text for phrase in _NOT_CANCELLATIONS):
+        return False
+    if any(phrase in text for phrase in _NOT_LEAVING):
         return False
     if not any(phrase in text for phrase in _DEFERRAL_PHRASES):
         return False
@@ -572,7 +610,28 @@ def _is_deferral(message: str) -> bool:
     return not _mentions_a_when(text)
 
 
-def _defer(calendar: CalendarBackend, session_id: str) -> AgentResponse:
+def backs_out(message: str, *, booking_in_progress: bool = False) -> bool:
+    """Whether the patient is leaving a booking, whichever way they say it.
+
+    Public because the router needs it: a message like "nah sorry, I'll
+    book later" has nothing in it that says "appointment", so without
+    knowing a booking is under way it is routed as small talk and answered
+    with the out-of-scope speech. `booking_in_progress` is what lets a bare
+    "no" count as well.
+    """
+    if _wants_to_cancel(message) or _is_deferral(message):
+        return True
+    if booking_in_progress:
+        text = " ".join(message.lower().replace(",", " ").replace(".", " ").split())
+        return text in _SHORT_NOES
+    return False
+
+
+def _defer(
+    calendar: CalendarBackend,
+    session_id: str,
+    history: list[dict[str, str]] | None = None,
+) -> AgentResponse:
     """Acknowledge someone walking away from a booking.
 
     The failure this fixes: told "nah leave it for now, I'll book other
@@ -596,6 +655,21 @@ def _defer(calendar: CalendarBackend, session_id: str) -> AgentResponse:
             agent=AGENT_NAME,
             success=True,
             metadata={"stage": "deferred", "kept_booking": booking["event_id"]},
+        )
+
+    # Said once already? Saying it again word for word is the parroting
+    # this whole path exists to prevent, so the second time is shorter.
+    last_said = next(
+        ((turn.get("content") or "") for turn in reversed(history or [])
+         if turn.get("role") != "user"),
+        "",
+    )
+    if "haven't booked anything" in last_said:
+        return AgentResponse(
+            answer="Of course. I'm here whenever you need anything.",
+            agent=AGENT_NAME,
+            success=True,
+            metadata={"stage": "deferred"},
         )
 
     return AgentResponse(

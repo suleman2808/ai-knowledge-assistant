@@ -304,8 +304,16 @@ def test_no_note_when_there_is_no_secondary_intent() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_greeting_and_out_of_scope_get_different_answers() -> None:
+def test_greeting_and_out_of_scope_get_different_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`other` covers two cases that deserve different replies."""
+    # A message reaching `other` through the model now gets a second look,
+    # to tell chatter from a real request. Here it is a real request.
+    monkeypatch.setattr(
+        "app.llm.complete_json",
+        lambda *_a, **_k: {"kind": "out_of_scope", "reply": ""},
+    )
     greeting = other_node({"routed_by": "keyword", "routing_reason": "greeting with no request"})
     farewell = other_node({"routed_by": "keyword", "routing_reason": "thanks with no request"})
     out_of_scope = other_node({"routed_by": "llm", "routing_reason": "asks about a cinema"})
@@ -565,3 +573,281 @@ def test_a_complaint_with_a_rhetorical_question_ends_with_the_reference() -> Non
 
     assert "ask me again on its own" not in turn["answer"]
     assert turn["answer"].rstrip().endswith("CMP-20261007-B9AC.")
+
+
+# ---------------------------------------------------------------------------
+# Leaving a booking half-way
+# ---------------------------------------------------------------------------
+
+MID_BOOKING = [
+    {"role": "user", "content": "Book a blood test next Tuesday at 8am"},
+    {
+        "role": "assistant",
+        "content": "Happy to book a blood test for Tuesday 3 November. "
+                   "Could you tell me your full name and a contact number?",
+    },
+]
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        # Reported: this got the out-of-scope speech, tagged General, a few
+        # seconds after being asked for a name.
+        "nah sorry, ill book later",
+        "ill book it later",
+        "never mind",
+        "no",
+        "nah",
+        "leave it for now",
+    ],
+)
+def test_backing_out_mid_booking_stays_with_the_booking_agent(message: str) -> None:
+    """Nothing in these messages says "appointment", so the router used to
+    send them to the model and get `other` back. It is decided in code now:
+    no model call is made (the suite's guard would fail this test if one
+    were)."""
+    from app.graph.router import classify
+
+    result = classify({"message": message, "history": MID_BOOKING})
+
+    assert result["intent"] == "booking"
+    assert result["routed_by"] == "keyword"
+
+
+def test_the_same_words_with_no_booking_under_way_are_not_hijacked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare "no" means nothing without a question to answer."""
+    from app.graph import router
+
+    monkeypatch.setattr(
+        router, "complete_json",
+        lambda *_a, **_k: {"intent": "other", "confidence": 0.9, "reason": "small talk"},
+    )
+
+    result = router.classify({"message": "nah", "history": []})
+
+    assert result["routed_by"] != "keyword"
+
+
+def test_asking_for_a_later_time_is_not_leaving(monkeypatch: pytest.MonkeyPatch) -> None:
+    """"Later" is also how people ask for an afternoon slot."""
+    from app.graph import router
+
+    monkeypatch.setattr(
+        router, "complete_json",
+        lambda *_a, **_k: {"intent": "booking", "confidence": 0.9, "reason": "arranging"},
+    )
+
+    result = router.classify(
+        {"message": "can I come later in the afternoon instead?", "history": MID_BOOKING}
+    )
+
+    assert result["routed_by"] != "keyword"
+
+
+def test_leaving_mid_booking_gets_a_booking_reply_not_the_out_of_scope_speech() -> None:
+    from app.agents.booking import handle_booking
+    from app.integrations.calendar import InMemoryCalendar
+
+    reply = handle_booking(
+        "nah sorry, ill book later",
+        history=MID_BOOKING,
+        backend=InMemoryCalendar(appointments=[]),
+        session_id="walked-away",
+    )
+
+    assert reply.metadata["stage"] == "deferred"
+    assert "outside what I can help with" not in reply.answer
+    assert "full name" not in reply.answer.lower()
+
+
+def test_a_bare_no_at_the_booking_agent_never_re_asks_for_details() -> None:
+    """Found replaying the conversation against the real model: after "I
+    haven't booked anything", the next "no" was routed to booking by the
+    model, which asked for the patient's details a second time."""
+    from app.agents.booking import handle_booking
+    from app.integrations.calendar import InMemoryCalendar
+
+    reply = handle_booking(
+        "no",
+        history=[
+            {"role": "assistant",
+             "content": "No problem at all - I haven't booked anything."},
+        ],
+        backend=InMemoryCalendar(appointments=[]),
+        session_id="said-no",
+    )
+
+    assert reply.metadata["stage"] == "deferred"
+    assert "come in for" not in reply.answer.lower()
+
+
+# ---------------------------------------------------------------------------
+# Small talk
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("message", "kind"),
+    [
+        # Reported: "thanks man" got "I'm sorry, that one's outside what I
+        # can help with" - a polite customer told the assistant could not
+        # help them.
+        ("thanks man", "thanks"),
+        ("thanks bro", "thanks"),
+        ("thank you so much mate", "thanks"),
+        ("ok thanks", "thanks"),
+        ("how are you?", "howareyou"),
+        ("Who are you", "identity"),
+        ("are you a bot?", "identity"),
+        ("sorry man", "sorry"),
+        ("lol", "ack"),
+        ("ok cool", "ack"),
+        ("take care", "farewell"),
+    ],
+)
+def test_ordinary_small_talk_needs_no_model(message: str, kind: str) -> None:
+    from app.graph.router import _fast_path
+
+    assert _fast_path(message)[2] == kind
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        # A greeting with a question in it is a question.
+        "thanks, how much is a lipid profile?",
+        "book a blood test",
+        "how are you feeling about my results?",
+        "who are your doctors?",
+        "yes",
+        "ok book it",
+    ],
+)
+def test_small_talk_words_do_not_swallow_a_real_request(message: str) -> None:
+    from app.graph.router import _fast_path
+
+    assert _fast_path(message) is None
+
+
+def test_ok_after_a_booking_question_is_left_to_the_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """"Ok" can confirm a slot. It is only a nod when nothing was just asked."""
+    from app.graph import router
+
+    monkeypatch.setattr(
+        router, "complete_json",
+        lambda *_a, **_k: {"intent": "booking", "confidence": 0.9, "reason": "confirms"},
+    )
+
+    result = router.classify({"message": "ok", "history": MID_BOOKING})
+
+    assert result["routed_by"] != "keyword"
+    assert result["intent"] == "booking"
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("ack with no request", "Glad to help"),
+        ("howareyou with no request", "I'm doing well"),
+        ("sorry with no request", "No need to apologise"),
+        ("identity with no request", "AI assistant"),
+        ("thanks with no request", "You're welcome"),
+    ],
+)
+def test_each_kind_of_small_talk_gets_its_own_reply(reason: str, expected: str) -> None:
+    result = other_node({"routed_by": "keyword", "routing_reason": reason})
+
+    assert expected in result["answer"]
+    assert "outside what I can help with" not in result["answer"]
+
+
+def test_the_assistant_says_it_is_an_assistant() -> None:
+    """Asked whether it is a person, the honest answer is the only one."""
+    answer = other_node(
+        {"routed_by": "keyword", "routing_reason": "identity with no request"}
+    )["answer"]
+
+    assert "not a person" in answer
+
+
+def test_chatter_the_table_missed_gets_a_friendly_reply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.llm.complete_json",
+        lambda *_a, **_k: {
+            "kind": "small_talk",
+            "reply": "Ha, thank you! Let me know if I can help with anything here.",
+        },
+    )
+
+    result = other_node({"message": "you're pretty funny", "routed_by": "llm",
+                         "routing_reason": "banter"})
+
+    assert result["agent_metadata"]["kind"] == "small_talk"
+    assert "outside what I can help with" not in result["answer"]
+
+
+def test_a_real_request_still_gets_the_polite_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.llm.complete_json",
+        lambda *_a, **_k: {"kind": "out_of_scope", "reply": ""},
+    )
+
+    result = other_node({"message": "write me a poem about cats", "routed_by": "llm",
+                         "routing_reason": "asks for a poem"})
+
+    assert result["agent_metadata"]["kind"] == "out_of_scope"
+    assert "outside what I can help with" in result["answer"]
+
+
+@pytest.mark.parametrize(
+    "invented",
+    [
+        # Each is a reply the model might plausibly write, and each makes a
+        # claim about the business that no document supports.
+        "Happy to help - we're open until 6pm every weekday!",
+        "Anytime! Our full blood count is only $45.",
+        "Of course. Our Monday to Friday team is always here.",
+        "A" * 400,
+        "Visit www.riverbend.example for more.",
+    ],
+)
+def test_a_free_reply_that_invents_something_is_discarded(
+    monkeypatch: pytest.MonkeyPatch, invented: str
+) -> None:
+    """A reply the model writes freely is where an invented opening time or
+    price would appear, which is the one failure this project exists to
+    prevent. Code bounds it, and falls back to the refusal."""
+    monkeypatch.setattr(
+        "app.llm.complete_json",
+        lambda *_a, **_k: {"kind": "small_talk", "reply": invented},
+    )
+
+    result = other_node({"message": "thanks a bunch", "routed_by": "llm",
+                         "routing_reason": "chatter"})
+
+    assert result["agent_metadata"]["kind"] == "out_of_scope"
+
+
+def test_a_failing_model_falls_back_to_the_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.llm import LLMError
+
+    def _down(*_a, **_k):
+        raise LLMError("provider unreachable")
+
+    monkeypatch.setattr("app.llm.complete_json", _down)
+
+    result = other_node({"message": "thanks a bunch", "routed_by": "llm",
+                         "routing_reason": "chatter"})
+
+    assert result["agent_metadata"]["kind"] == "out_of_scope"

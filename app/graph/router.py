@@ -34,24 +34,70 @@ from app.prompts import render
 logger = logging.getLogger(__name__)
 
 # Whole messages, normalised, that need no model call. Matched exactly
-# after stripping punctuation and case — never as substrings.
+# after stripping punctuation, case and filler - never as substrings.
+#
+# This used to be four short lists, and "thanks man" fell through all of
+# them to the model, which said `other`, which got the out-of-scope
+# speech: a polite customer told the assistant could not help them. People
+# say thanks, ok and how are you constantly, and none of it needs a model.
 PLEASANTRIES: dict[str, str] = {
     **{k: "greeting" for k in (
-        "hi", "hey", "hello", "yo", "hiya", "good morning", "good afternoon",
-        "good evening", "hi there", "hello there",
+        "hi", "hey", "hello", "yo", "hiya", "hii", "heyy", "howdy", "sup",
+        "good morning", "good afternoon", "good evening", "good day",
+        "hi there", "hello there", "hey there", "hi hi", "hello hello",
     )},
     **{k: "thanks" for k in (
-        "thanks", "thank you", "thanks a lot", "thank you so much", "ta",
-        "cheers", "much appreciated", "thankyou",
+        "thanks", "thank you", "thankyou", "thx", "ty", "ta", "cheers",
+        "much appreciated", "many thanks", "thanks again", "appreciate it",
+        "i appreciate it", "ok thanks", "okay thanks", "ok thank you",
+        "okay thank you", "great thanks", "cool thanks", "perfect thanks",
+        "alright thanks", "thanks ok", "thanks great", "thanks for your help",
+        "thanks for the help", "thank you for your help",
     )},
     **{k: "farewell" for k in (
-        "bye", "goodbye", "bye bye", "see you", "see ya", "cheerio",
-        "that's all", "thats all", "nothing else", "no thanks", "no thank you",
+        "bye", "goodbye", "bye bye", "see you", "see ya", "see you later",
+        "cya", "ttyl", "talk later", "take care", "have a good day",
+        "have a nice day", "cheerio", "that's all", "thats all",
+        "that is all", "that will be all", "nothing else", "nothing more",
+        "all done", "all good", "im good", "i'm good", "no more questions",
+        "no thanks", "no thank you", "no thats all", "no that's all",
+    )},
+    # Said to acknowledge an answer. Not "yes"/"yeah"/"sure": those answer
+    # a question, and without the question they mean nothing.
+    **{k: "ack" for k in (
+        "ok", "okay", "k", "kk", "cool", "great", "nice", "alright",
+        "got it", "understood", "noted", "perfect", "awesome", "fine",
+        "good", "lol", "haha", "hmm", "i see", "makes sense", "sounds good",
+        "oh ok", "oh okay", "ok cool", "okay cool", "ok great", "oh i see",
+    )},
+    **{k: "howareyou" for k in (
+        "how are you", "how are you doing", "how r u", "how are u",
+        "hows it going", "how's it going", "how are things", "whats up",
+        "what's up", "how is your day", "how is it going", "you good",
+    )},
+    **{k: "identity" for k in (
+        "who are you", "what are you", "are you a bot", "are you a robot",
+        "are you human", "are you real", "are you ai", "are you an ai",
+        "are you chatgpt", "what is your name", "whats your name",
+        "what's your name", "who am i talking to", "who is this",
+        "who am i speaking to", "are you a real person",
+    )},
+    **{k: "sorry" for k in (
+        "sorry", "my bad", "oops", "apologies", "sorry about that",
+        "im sorry", "i'm sorry", "sorry man", "sorry again",
     )},
 }
 
-# Longest pleasantry worth checking. Anything longer has content in it.
-MAX_PLEASANTRY_WORDS = 3
+# Words that add warmth and no meaning. "Thanks man" is "thanks".
+FILLER_WORDS = frozenset({
+    "man", "bro", "mate", "dude", "buddy", "pal", "friend", "sir", "maam",
+    "madam", "guys", "please", "pls", "again", "heaps", "very", "so",
+    "really", "just", "then", "there",
+})
+
+# Longest pleasantry worth checking, after filler is removed. Anything
+# longer has content in it.
+MAX_PLEASANTRY_WORDS = 5
 
 # "I'd like to speak to a human being please" is nine. Longer than this
 # and there is something else in the message worth routing on.
@@ -109,10 +155,16 @@ def _fast_path(message: str) -> tuple[Intent, str, str] | None:
     if wants_a_person(message) and len(normalised.split()) <= MAX_PERSON_REQUEST_WORDS:
         return ("other", "asking for a person", "person")
 
-    if len(normalised.split()) > MAX_PLEASANTRY_WORDS:
+    # "a lot" and "so much" are filler too, but they are two words that
+    # only mean anything together, so they go before the words are split.
+    squeezed = f" {normalised} "
+    for phrase in (" a lot ", " so much ", " very much ", " a ton "):
+        squeezed = squeezed.replace(phrase, " ")
+    words = [w for w in squeezed.split() if w not in FILLER_WORDS]
+    if not words or len(words) > MAX_PLEASANTRY_WORDS:
         return None
 
-    kind = PLEASANTRIES.get(normalised)
+    kind = PLEASANTRIES.get(" ".join(words)) or PLEASANTRIES.get(normalised)
     if kind:
         return ("other", f"{kind} with no request", kind)
     return None
@@ -134,6 +186,15 @@ def classify(state: AssistantState) -> AssistantState:
     history = state.get("history") or []
 
     fast = _fast_path(message)
+    if fast is not None and fast[2] == "ack":
+        # "Ok" after "Would 10am suit you?" confirms a slot. It is only an
+        # acknowledgement when the last thing said was not a question
+        # about a booking, so that case is left to the model, which can
+        # see the conversation.
+        from app.agents.booking import _looks_mid_booking
+
+        if _looks_mid_booking(history):
+            fast = None
     if fast is not None:
         intent, reason, _kind = fast
         return {
@@ -141,6 +202,23 @@ def classify(state: AssistantState) -> AssistantState:
             "secondary_intent": None,
             "confidence": 1.0,
             "routing_reason": reason,
+            "routed_by": "keyword",
+        }
+
+    # Leaving a booking is part of the booking, not small talk. "Nah
+    # sorry, I'll book later" names no service, no day and no appointment,
+    # so left to the model it came back as `other` and got the
+    # out-of-scope speech, a few seconds after being asked for a name.
+    # Decided in code: it needs no judgement, only the last thing said.
+    from app.agents.booking import _looks_mid_booking, backs_out
+
+    mid_booking = _looks_mid_booking(history)
+    if mid_booking and backs_out(message, booking_in_progress=True):
+        return {
+            "intent": "booking",
+            "secondary_intent": None,
+            "confidence": 1.0,
+            "routing_reason": "backing out of a booking in progress",
             "routed_by": "keyword",
         }
 

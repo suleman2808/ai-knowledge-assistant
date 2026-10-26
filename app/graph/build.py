@@ -82,6 +82,27 @@ FAREWELL = (
 # software, and leave the person with somewhere to go. The phone number
 # is there because a real one is the only thing that helps when the
 # assistant cannot.
+# Replies to the small talk the router recognises without a model. Short
+# on purpose: someone who said "ok" wants a nod, not a speech.
+ACKNOWLEDGED = "Glad to help. Is there anything else you need?"
+HOW_ARE_YOU = (
+    "I'm doing well, thank you for asking. How can I help you today?"
+)
+APOLOGY_ANSWERED = "No need to apologise at all. How can I help?"
+WHO_I_AM = (
+    "I'm the AI assistant for Riverbend Diagnostics, not a person. I can "
+    "answer questions about our tests, prices and policies, book a "
+    "collection, or pass on a complaint. And if you'd rather speak to "
+    "someone, our team is on (503) 555-0142."
+)
+
+SMALL_TALK_REPLIES = {
+    "ack": ACKNOWLEDGED,
+    "howareyou": HOW_ARE_YOU,
+    "sorry": APOLOGY_ANSWERED,
+    "identity": WHO_I_AM,
+}
+
 OUT_OF_SCOPE = (
     "I'm sorry, that one's outside what I can help with - I only deal with"
     " Riverbend Diagnostics and our laboratory services, so I'd only be"
@@ -393,6 +414,11 @@ def _own_details_answer(state: AssistantState) -> str:
     return sentence[:1].upper() + sentence[1:] + "."
 
 
+def _small_talk_kind(reason: str) -> str:
+    """The pleasantry kind the router recorded: "ack with no request" -> "ack"."""
+    return reason.split(" with no request")[0].strip() if "with no request" in reason else ""
+
+
 def other_node(state: AssistantState) -> dict[str, Any]:
     """Handle greetings, thanks and anything outside the laboratory's scope.
 
@@ -422,6 +448,9 @@ def other_node(state: AssistantState) -> dict[str, Any]:
     elif "own details" in reason:
         kind = "own_details"
         answer = _own_details_answer(state)
+    elif routed_by == "keyword" and _small_talk_kind(reason) in SMALL_TALK_REPLIES:
+        kind = _small_talk_kind(reason)
+        answer = SMALL_TALK_REPLIES[kind]
     elif routed_by == "keyword":
         kind = "farewell" if ("farewell" in reason or "thanks" in reason) else "greeting"
         answer = FAREWELL if kind == "farewell" else GREETING
@@ -450,8 +479,17 @@ def other_node(state: AssistantState) -> dict[str, Any]:
     else:
         # Classified as `other` by the model: a real message about
         # something the laboratory does not do.
-        kind = "out_of_scope"
-        answer = OUT_OF_SCOPE
+        # Social chatter is not an out-of-scope request. "Thanks man" and
+        # "you're funny" deserve an answer; "write me a poem" deserves the
+        # polite refusal. The model tells them apart, and code decides
+        # whether to trust what it wrote.
+        friendly = _small_talk_reply(state.get("message", ""))
+        if friendly:
+            kind = "small_talk"
+            answer = friendly
+        else:
+            kind = "out_of_scope"
+            answer = OUT_OF_SCOPE
 
     return {
         "answer": answer,
@@ -465,6 +503,66 @@ def other_node(state: AssistantState) -> dict[str, Any]:
             "recognised": bool(patient),
         },
     }
+
+
+SMALL_TALK_SYSTEM = """You are the front-desk assistant for Riverbend Diagnostics, a medical laboratory.
+
+The patient's message was not about the laboratory's services. Decide which of two things it is.
+
+small_talk: purely social, with NO request for information or action. Thanks, praise, a compliment, a joke, an apology, "you're funny", "how's your day", "good night", venting without asking anything.
+
+out_of_scope: anything that asks for something unrelated to the laboratory - a poem, a recipe, the weather, a calculation, advice, facts about the world, instructions to do a task.
+
+For small_talk, write one warm reply of at most 25 words. Rules for the reply: no facts about the laboratory, no numbers, no days or times, no promises, no medical comment. It may end by offering to help, but never mention results, tests, appointments or any detail the patient has not raised themselves: you do not know who they are or why they are here. For out_of_scope leave the reply empty.
+
+Answer with JSON only: {"kind": "small_talk" or "out_of_scope", "reply": "..."}"""
+
+# A reply the model writes freely is bounded by code, because a free reply
+# is exactly where an invented opening time or price would appear.
+_UNSAFE_WORDS = (
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+    "sunday", "price", "cost", "free of charge", "discount", "guarantee",
+    "promise", "http", "www", ".com", "diagnosis", "diagnose", "results are",
+    "your result",
+)
+MAX_SMALL_TALK_CHARS = 200
+
+
+def _small_talk_reply(message: str) -> str | None:
+    """A natural reply to social chatter the router's table did not know.
+
+    Returns None - and the caller falls back to the polite refusal - when
+    the model judges the message to be a real off-topic request, when it
+    fails, or when what it wrote breaks a rule. Better a correct refusal
+    than a charming invention.
+    """
+    from app.config import settings
+    from app.llm import LLMError, complete_json
+
+    try:
+        result = complete_json(
+            f"Patient message: {message}",
+            system=SMALL_TALK_SYSTEM,
+            model=settings.router_model,
+            reasoning_effort=settings.router_reasoning_effort,
+            max_tokens=300,
+        )
+    except LLMError as exc:
+        logger.info("Small-talk check unavailable (%s); using the refusal", exc)
+        return None
+
+    if str(result.get("kind", "")).strip().lower() != "small_talk":
+        return None
+
+    reply = " ".join(str(result.get("reply") or "").split())
+    lowered = reply.lower()
+    if not reply or len(reply) > MAX_SMALL_TALK_CHARS:
+        return None
+    if any(ch.isdigit() for ch in reply):
+        return None
+    if any(word in lowered for word in _UNSAFE_WORDS):
+        return None
+    return reply
 
 
 def _is_mostly_contact_details(message: str) -> bool:
