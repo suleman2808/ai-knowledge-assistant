@@ -851,3 +851,16 @@ def test_a_failing_model_falls_back_to_the_refusal(
                          "routing_reason": "chatter"})
 
     assert result["agent_metadata"]["kind"] == "out_of_scope"
+
+
+def test_the_prompt_forbids_grading_a_patients_own_value() -> None:
+    """Reported: "9.2 g/dL is not in the critical range" - an interpretation of
+    the patient's result in all but name, which they will hear as reassurance."""
+    from pathlib import Path
+
+    prompt = (Path(__file__).parent.parent / "app" / "prompts" / "inquiry_system.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Do not compare their value" in prompt
+    assert "several parts" in prompt

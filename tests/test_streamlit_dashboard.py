@@ -142,13 +142,15 @@ def test_with_no_password_configured_it_refuses_rather_than_opening(
 # ---------------------------------------------------------------------------
 
 
-def test_all_five_views_are_present() -> None:
+def test_all_six_views_are_present() -> None:
     record_turn()
 
     app = page(signed_in=True)
 
     labels = [tab.label for tab in app.tabs]
-    assert labels == ["Overview", "Conversations", "Bookings", "Complaints", "Customers"]
+    assert labels == [
+        "Overview", "Conversations", "Bookings", "Complaints", "Callbacks", "Customers",
+    ]
 
 
 def test_the_overview_reports_real_figures() -> None:
@@ -270,3 +272,83 @@ def test_the_loading_message_does_not_claim_to_search_documents() -> None:
 
     assert "st.spinner(" in source
     assert "Searching the laboratory" not in source
+
+
+# ---------------------------------------------------------------------------
+# One visitor must not see another's conversation
+# ---------------------------------------------------------------------------
+
+
+def test_every_visitor_to_the_hosted_demo_gets_their_own_session() -> None:
+    """Found reading the live dashboard: 27 messages, one conversation. The
+    session id was the constant "streamlit" for everyone, so every visitor
+    shared one conversation - and "do you have my number" and "cancel it"
+    are looked up by session, so a visitor could be told another visitor's
+    name and phone number, or cancel their booking."""
+    from streamlit.testing.v1 import AppTest
+
+    first = AppTest.from_file(str(PROJECT_ROOT / "streamlit_app.py"), default_timeout=60).run()
+    second = AppTest.from_file(str(PROJECT_ROOT / "streamlit_app.py"), default_timeout=60).run()
+
+    a = first.session_state["session_id"]
+    b = second.session_state["session_id"]
+
+    assert a != b
+    assert a != "streamlit" and b != "streamlit"
+    assert len(a) == 16
+
+
+def test_the_session_id_is_never_a_constant_in_the_source() -> None:
+    source = (PROJECT_ROOT / "streamlit_app.py").read_text(encoding="utf-8")
+
+    assert '"streamlit")' not in source
+    assert "session_id=st.session_state.session_id" in source
+
+
+def test_a_new_conversation_is_a_new_session() -> None:
+    """Nothing said in the last one - a name, a number, a booking - may be
+    answered from the next."""
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(str(PROJECT_ROOT / "streamlit_app.py"), default_timeout=60).run()
+    before = app.session_state["session_id"]
+
+    # `llm_configured` is false without a key, which stops the page before
+    # the button is drawn; the reset is checked in the source instead.
+    source = (PROJECT_ROOT / "streamlit_app.py").read_text(encoding="utf-8")
+    reset = source[source.index('if st.button("New conversation"'):]
+    assert "st.session_state.session_id = new_session_id()" in reset[:900]
+    assert before
+
+
+def test_the_callbacks_tab_exists_and_lists_a_request() -> None:
+    """The live demo records callbacks, and the Streamlit dashboard had no
+    tab to show them: the feature existed only on the HTML dashboard."""
+    from app.integrations.analytics import record_callback
+
+    record_callback(session_id="cb-test", patient_name="Sam Reed",
+                    phone="(503) 555-0122", context="asked to speak to someone")
+
+    app = page(signed_in=True)
+
+    labels = [t.label for t in app.tabs]
+    assert "Callbacks" in labels
+    assert "Sam Reed" in text_of(app) or any("Sam Reed" in str(e.value) for e in app.main)
+
+
+def test_a_normalised_phone_key_is_shown_as_a_phone_number() -> None:
+    """The customers table showed "5035550155", a matching key."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("admin_page", PAGE)
+    source = PAGE.read_text(encoding="utf-8")
+    assert "def spoken_phone" in source
+    namespace: dict = {}
+    exec(  # noqa: S102 - the page's own pure helper, extracted to test it alone
+        source[source.index("def spoken_phone"):source.index("def callbacks")], namespace
+    )
+
+    assert namespace["spoken_phone"]("5035550155") == "(503) 555-0155"
+    assert namespace["spoken_phone"]("503-555-0155") == "(503) 555-0155"
+    assert namespace["spoken_phone"]("") == ""
+    assert spec is not None

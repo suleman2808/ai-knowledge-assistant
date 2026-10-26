@@ -231,6 +231,49 @@ def records(loader, empty: str, columns: dict[str, str]) -> None:
     table(rows, columns)
 
 
+def spoken_phone(value: object) -> str:
+    """"5035550155" -> "(503) 555-0155". Anything else is shown as it is.
+
+    The customers table is keyed on a normalised number, which is a
+    matching key and not something a person should be asked to read.
+    """
+    digits = "".join(c for c in str(value or "") if c.isdigit())
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return str(value or "")
+
+
+def callbacks() -> None:
+    """People who asked to speak to a person, oldest first, with a way to
+    tick each one off.
+
+    The assistant tells them the team will ring, so each row is a promise
+    the practice has already made. A list that cannot be cleared stops
+    being read, which is why every outstanding row has its own button.
+    """
+    rows = analytics.callbacks()
+    if not rows:
+        st.info("Nobody is waiting for a call back.")
+        return
+
+    st.caption(
+        "Customers who asked to speak to a person. The assistant told them "
+        "the team would ring, so these are promises the practice has "
+        "already made."
+    )
+    for row in rows:
+        asked, name, phone, about, action = st.columns([2.2, 1.6, 1.8, 3.6, 1.6])
+        asked.caption(str(row["created_at"]).replace("T", " "))
+        name.write(row["patient_name"] or "-")
+        phone.write(spoken_phone(row["phone"]) if row["phone"] else "no number")
+        about.write(row["context"] or "-")
+        if row["handled_at"]:
+            action.caption("called")
+        elif action.button("Mark called", key=f"callback-{row['id']}"):
+            analytics.mark_callback_handled(row["id"])
+            st.rerun()
+
+
 def main() -> None:
     if not sign_in():
         return
@@ -246,7 +289,9 @@ def main() -> None:
         "so these records reset when the app restarts."
     )
 
-    tabs = st.tabs(["Overview", "Conversations", "Bookings", "Complaints", "Customers"])
+    tabs = st.tabs(
+        ["Overview", "Conversations", "Bookings", "Complaints", "Callbacks", "Customers"]
+    )
 
     with tabs[0]:
         overview()
@@ -267,8 +312,10 @@ def main() -> None:
              "Severity": "severity", "Summary": "summary", "Escalated": "escalated"},
         )
     with tabs[4]:
+        callbacks()
+    with tabs[5]:
         records(
-            analytics.customers,
+            lambda: [{**r, "phone": spoken_phone(r.get("phone"))} for r in analytics.customers()],
             "No returning customers yet.",
             {"Name": "name", "Phone": "phone", "Bookings": "visit_count",
              "First seen": "first_seen", "Last seen": "last_seen"},

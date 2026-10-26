@@ -22,6 +22,7 @@ Two things differ from a local run, both forced by the platform:
 from __future__ import annotations
 
 import os
+import uuid
 
 import streamlit as st
 
@@ -215,6 +216,28 @@ html, body, [class*="css"], [data-testid="stAppViewContainer"] {
   border-color: var(--rb-brand); color: var(--rb-brand);
 }
 
+/* The header row stays in view as the conversation grows. It used to
+   scroll away with the first few messages, taking "New conversation" with
+   it, so a long chat could only be reset by scrolling all the way back up. */
+/* A sticky element cannot travel outside its parent, and Streamlit wraps
+   this row in a box exactly as tall as the row. Stickiness on the row
+   itself therefore did nothing; it has to be on the wrapper, whose parent
+   is the whole page. */
+[data-testid="stLayoutWrapper"]:has(.rb-head) {
+  position: sticky; top: 0; z-index: 90;
+  background: #1b1a18;
+  padding: .55rem 0 .65rem;
+  margin-bottom: .4rem;
+  border-bottom: 1px solid #2c2b28;
+}
+
+/* The page link to the dashboard, set like the rail's other small links. */
+[data-testid="stSidebar"] [data-testid="stPageLink"] a {
+  padding: 0; background: transparent; font-size: 12.5px;
+  color: var(--rb-muted);
+}
+[data-testid="stSidebar"] [data-testid="stPageLink"] a:hover { color: var(--rb-brand); }
+
 /* The header sits against the top of the page, with a hairline under it
    like the chat page's. */
 [data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
@@ -370,7 +393,21 @@ HEADER = """
 """
 
 
+def new_session_id() -> str:
+    """A fresh, unguessable id for one visitor's conversation."""
+    return uuid.uuid4().hex[:16]
+
+
 def main() -> None:
+    # One id per browser session. This used to be the constant "streamlit"
+    # for everyone, so every visitor to the public demo shared a single
+    # conversation: the dashboard showed one session with every turn in it,
+    # and - worse - the lookups for "do you have my number" and "cancel it"
+    # are keyed by session, so a visitor could be told another visitor's
+    # name and phone number, or cancel their booking.
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = new_session_id()
+
     st.markdown(THEME, unsafe_allow_html=True)
 
     # The brand sits in the rail and the page title in the header bar, as
@@ -386,6 +423,9 @@ def main() -> None:
         if st.button("New conversation", use_container_width=True):
             for key in ("history", "turns", "pending"):
                 st.session_state.pop(key, None)
+            # A new conversation is a new session: nothing said in the last
+            # one - a name, a number, a booking - may be answered from here.
+            st.session_state.session_id = new_session_id()
             st.rerun()
 
     if not settings.llm_configured:
@@ -437,6 +477,10 @@ def main() -> None:
             "[Source on GitHub]"
             "(https://github.com/suleman2808/ai-knowledge-assistant)"
         )
+        # Streamlit's own page switcher is hidden so the rail matches the
+        # chat UI, which took the only route to the dashboard with it. The
+        # chat page has these links at the foot of its rail; so does this.
+        st.page_link("pages/Admin_dashboard.py", label="Admin dashboard")
         st.info(
             "**Bookings are held in memory here.** A public demo with no "
             "login should not have write access to anyone's Google "
@@ -484,7 +528,7 @@ def main() -> None:
                 turn = run(
                     question,
                     history=st.session_state.history,
-                    session_id=st.session_state.get("session_id", "streamlit"),
+                    session_id=st.session_state.session_id,
                 )
             except Exception as exc:  # the UI must not show a traceback
                 st.error(

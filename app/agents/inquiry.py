@@ -27,6 +27,7 @@ from app.agents.base import AgentResponse, failure, guarded_tokens
 from app.config import settings
 from app.llm import LLMError, active_sink, complete, complete_verbose
 from app.prompts import render
+from app.rag.catalogue import rows_named_in
 from app.rag.retriever import RetrievalResult, RetrievalStatus, retrieve
 
 logger = logging.getLogger(__name__)
@@ -175,6 +176,58 @@ def _refusal_for(result: RetrievalResult) -> AgentResponse:
     )
 
 
+# ---------------------------------------------------------------------------
+# A patient asking what their own result means
+# ---------------------------------------------------------------------------
+
+# The laboratory's policy is that staff do not interpret individual
+# results, and the model was asked to say so in the prompt. It did, and
+# then added "9.2 g/dL is not below the critical threshold (7 g/dL)" -
+# every time, through two rewordings of the instruction. That sentence is
+# an interpretation of the patient's number in all but name, and a patient
+# hears it as "you're fine". A rule this important is not left to a
+# prompt: it is decided here, and the model is not asked.
+RESULT_INTERPRETATION_ANSWER = (
+    "I can't tell you whether that result is a problem for you. Our staff "
+    "are not able to interpret individual results or advise on what they "
+    "mean, so please take your report to the doctor who requested the test, "
+    "or to any general practitioner, for an assessment. If you'd like to "
+    "talk it through with our team first, you can call us on (503) 555-0142."
+)
+
+_RESULT_CUES = (
+    "haemoglobin", "hemoglobin", "glucose", "cholesterol", "hba1c", "tsh",
+    "creatinine", "platelet", "wbc", "rbc", "ferritin", "vitamin", "bilirubin",
+    "triglyceride", "ldl", "hdl", "sugar", "level", "levels", "result",
+    "results", "count", "reading", "value", "report", "g/dl", "mg/dl",
+    "mmol", "iu/", "ng/ml", "%",
+)
+_INTERPRETIVE_WORDS = (
+    "bad", "normal", "abnormal", "high", "low", "concerning", "worried",
+    "worry", "serious", "dangerous", "okay", "ok", "fine", "healthy", "good",
+    "problem", "worrying", "too high", "too low", "mean", "means",
+)
+
+
+def asks_to_interpret_a_result(message: str) -> bool:
+    """Whether the patient has given a value and asked what it means.
+
+    Needs all three of a number, something that marks it as a result (an
+    analyte, a unit, "my result"), and a judgement being asked for. Any one
+    alone is ordinary: "do I need to fast for 12 hours", "how much is a
+    glucose test", "is 8am ok".
+    """
+    text = " ".join(message.lower().split())
+    if not any(ch.isdigit() for ch in text):
+        return False
+    words = set(text.replace("?", " ").replace(",", " ").replace(".", " ").split())
+    judged = any(w in words for w in _INTERPRETIVE_WORDS if " " not in w) or any(
+        phrase in text for phrase in _INTERPRETIVE_WORDS if " " in phrase
+    )
+    cued = any(cue in text for cue in _RESULT_CUES)
+    return judged and cued
+
+
 def answer_inquiry(
     question: str,
     *,
@@ -191,8 +244,31 @@ def answer_inquiry(
         answer came from retrieved documents; when it is False the answer
         is a refusal, never an ungrounded guess.
     """
+    if asks_to_interpret_a_result(question):
+        # Retrieved only so the staff dashboard can show which section the
+        # policy came from; what is said does not depend on it.
+        policy = retrieve("staff do not interpret individual results")
+        return AgentResponse(
+            answer=RESULT_INTERPRETATION_ANSWER,
+            agent=AGENT_NAME,
+            success=True,
+            sources=policy.sources if policy.grounded else [],
+            metadata={
+                "grounded": True,
+                "handled": "result_interpretation",
+                "retrieval_status": policy.status.value,
+                "retrieved": [c.breadcrumb for c in policy.chunks],
+            },
+        )
+
     search_query, rewritten = _standalone_question(question, history)
     result = retrieve(search_query)
+
+    # A test named in the question is looked up in the catalogue by name,
+    # and its row is put in front of the model whatever retrieval found.
+    # "How much is a lipid profile?" never retrieved the table that holds
+    # the answer, so the model, correctly, refused to answer it.
+    result = _with_catalogue_rows(result, search_query)
 
     if not result.grounded:
         # A compound question can also embed to a point between its two
@@ -210,6 +286,19 @@ def answer_inquiry(
         if rewritten:
             response.metadata["search_query"] = search_query
         return response
+
+    # A question with two parts is answered one part at a time. Asked "what
+    # are your opening hours and where are your branches", one prompt over
+    # one blended context answered the hours and dropped the branches
+    # without a word; asked again after a wording change, it answered the
+    # branches and dropped the hours. A model told to answer both does not
+    # reliably do so, and the failure is silent. Each part gets its own
+    # question and its own context, and a part that cannot be answered is
+    # named as such rather than left out.
+    if len(_split_question(search_query)) >= 2:
+        in_parts = _answer_in_parts(search_query, question, history, result)
+        if in_parts is not None:
+            return in_parts
 
     prompt = render(
         "inquiry_user",
@@ -238,15 +327,6 @@ def answer_inquiry(
         )
 
     if _is_refusal(response.text):
-        # Before accepting the refusal: a compound question is the one
-        # case where the model is right that the context cannot answer
-        # *the question* while the documents can answer both halves of
-        # it. Retrieving per part and asking once more is cheap, and it
-        # happens only on a path that was about to decline anyway.
-        retried = _retry_as_parts(search_query, question, history, result)
-        if retried is not None:
-            return retried
-
         # Retrieval found something above the threshold, but the model
         # judged it not to answer this question. This is the safeguard
         # working, so it is logged at info rather than as an error.
@@ -296,6 +376,23 @@ _PART_SPLIT = re.compile(
     re.IGNORECASE,
 )
 MIN_PART_WORDS = 3
+BUSINESS_NAME = "Riverbend Diagnostics"
+
+
+def _anchor(part: str) -> str:
+    """Name the business in one half of a compound question.
+
+    "Where are your branches" scored 0.28 and was rejected as unrelated,
+    while the same question with the company name in it scores 0.62 and
+    finds the right section. A patient never says the company's name -
+    "your" means it - but every document is about it, so a fragment cut
+    out of a longer question loses the one word that located it.
+
+    Only applied to the parts of a compound question, never to a single
+    one: that would lift the score of every off-topic question as well,
+    and the whole point of the threshold is to keep those out.
+    """
+    return part if BUSINESS_NAME.lower() in part.lower() else f"{part} {BUSINESS_NAME}"
 MAX_PARTS = 3
 
 
@@ -323,7 +420,7 @@ def _retrieve_each_part(question: str) -> RetrievalResult | None:
     grounded_parts = 0
 
     for part in parts:
-        outcome = retrieve(part)
+        outcome = retrieve(_anchor(part))
         best = max(best, outcome.best_score)
         if not outcome.grounded:
             continue
@@ -351,92 +448,236 @@ def _retrieve_each_part(question: str) -> RetrievalResult | None:
     )
 
 
-def _retry_as_parts(
+def _with_catalogue_rows(result: RetrievalResult, query: str) -> RetrievalResult:
+    """Put the catalogue rows for any test the question names ahead of `result`.
+
+    Counts as grounded even when retrieval found nothing: an exact match on
+    a test's name in the catalogue is better evidence than a similarity
+    score, and it is the same document the answer would come from.
+    """
+    rows = rows_named_in(query)
+    if not rows:
+        return result
+
+    have = {c.chunk_id for c in result.chunks}
+    row_chunks = [r.as_chunk() for r in rows if r.as_chunk().chunk_id not in have]
+    return RetrievalResult(
+        query=result.query,
+        status=RetrievalStatus.OK,
+        chunks=[*row_chunks, *result.chunks],
+        best_score=max(result.best_score, 1.0),
+    )
+
+
+def _with_each_part(result: RetrievalResult, search_query: str) -> RetrievalResult:
+    """Add the chunks each half of a compound question retrieves to `result`.
+
+    A single question is returned untouched, at no cost: nothing is
+    retrieved a second time unless the question genuinely has parts.
+    """
+    split = _retrieve_each_part(search_query)
+    if split is None:
+        return result
+
+    have = {f"{c.source}#{c.breadcrumb}" for c in result.chunks}
+    extra = [c for c in split.chunks if f"{c.source}#{c.breadcrumb}" not in have]
+    if not extra:
+        return result
+
+    return RetrievalResult(
+        query=result.query,
+        status=RetrievalStatus.OK,
+        chunks=[*result.chunks, *extra],
+        best_score=max(result.best_score, split.best_score),
+    )
+
+
+_PRONOUNS = frozenset({"it", "that", "this", "them", "those", "these", "one"})
+
+
+PART_MAX_CHUNKS = 6
+MAX_QUOTED_PART = 80
+
+
+def _retrieve_part(part: str) -> RetrievalResult:
+    """Retrieve for one part of a compound question, both ways.
+
+    Naming the business helps some fragments and hurts others, so neither
+    is chosen. "Where are your branches" scores 0.28 bare and is rejected,
+    0.62 anchored and finds the right section. "What are your hours" is
+    the reverse: anchored, the company introduction outranks the section
+    that actually lists the hours, and the model - shown an introduction -
+    correctly says it cannot tell the patient the hours. The bare query
+    finds the hours section. Both are run and the results combined, the
+    plain one first.
+    """
+    plain = retrieve(part)
+    anchored = retrieve(_anchor(part))
+
+    chunks, have = [], set()
+    for chunk in [*(plain.chunks if plain.grounded else []),
+                  *(anchored.chunks if anchored.grounded else [])]:
+        if chunk.chunk_id not in have:
+            have.add(chunk.chunk_id)
+            chunks.append(chunk)
+
+    combined = RetrievalResult(
+        query=part,
+        status=RetrievalStatus.OK if chunks else anchored.status,
+        chunks=chunks[:PART_MAX_CHUNKS],
+        best_score=max(plain.best_score, anchored.best_score),
+    )
+    return _with_catalogue_rows(combined, part)
+
+
+def _part_question(part: str, previous: str) -> str:
+    """The question put to the model for one part of a compound question.
+
+    Asked bare, because the model checks whether the material answers "the
+    question". An earlier version appended the patient's whole message to
+    each part for context, and then the model, seeing "...and do you do
+    allergy testing?" in it, replied INSUFFICIENT_CONTEXT to "what are your
+    hours" - the half it could have answered - because the other half was
+    not covered.
+
+    The one thing a part can lack is its subject: "how much does it cost"
+    means nothing alone. Only when it contains a pronoun is the previous
+    part given, as the thing the pronoun refers to.
+    """
+    words = {w.strip("?,.!").lower() for w in part.split()}
+    if previous and words & _PRONOUNS:
+        return f"{part} (here 'it' or 'that' means the subject of: {previous})"
+    return part
+
+
+def _without_repeats(answers: list[str]) -> list[str]:
+    """Drop an answer that says what an earlier one already said.
+
+    Each part is answered on a context that includes everything the whole
+    question retrieved, so a part whose question overlaps another's - "do
+    I need to fast for a lipid profile, and how much does it cost" - can be
+    answered completely twice, once per part. Said twice, it reads as a
+    glitch.
+    """
+    from difflib import SequenceMatcher
+
+    kept: list[str] = []
+    for answer in answers:
+        normalised = " ".join(answer.lower().split())
+        if any(SequenceMatcher(None, normalised, " ".join(k.lower().split())).ratio() > 0.8
+               for k in kept):
+            continue
+        kept.append(answer)
+    return kept
+
+
+def _answer_in_parts(
     search_query: str,
     question: str,
     history: list[dict[str, str]] | None,
-    first: RetrievalResult,
+    whole: RetrievalResult,
 ) -> AgentResponse | None:
-    """Answer a compound question one half at a time.
+    """Answer a question with several parts one part at a time.
 
-    The failure this fixes: asked "what are your opening hours and where
-    are your branches", retrieval finds the hours and the model then
-    refuses, correctly, because the context does not answer the whole
-    question. The patient gets nothing, though half the answer was
-    sitting right there.
+    Each part is asked as its own question, on its own context: the chunks
+    retrieved for that part, plus whatever the whole question retrieved, so
+    that "how much does it cost" can still see the test the other half
+    named. The answers are joined in the order asked.
 
-    Each half is treated as its own question - retrieved for, and
-    answered on its own context - and the halves that can be answered are
-    joined. A half that cannot be answered is simply left out: the reply
-    says what the documents cover and nothing else, which is the same
-    promise the single-question path makes.
+    A part that cannot be answered is named in the reply. Leaving it out
+    would be the silent drop this function exists to prevent: the patient
+    would read the answer to the other half as the whole answer.
 
-    Returns None when the question is not compound or no half could be
-    answered, and the caller then declines as it would have.
+    Returns None when the question turns out not to have two parts worth
+    answering, or when none could be answered, and the caller then answers
+    the question as one.
     """
-    parts = _split_question(search_query)
-    if not parts:
-        return None
-
     from app.graph.build import wants_a_person
 
-    parts = [part for part in parts if not wants_a_person(part)]
-    if not parts:
+    parts = [p for p in _split_question(search_query) if not wants_a_person(p)]
+    if len(parts) < 2:
         return None
 
     answers: list[str] = []
+    unanswered: list[str] = []
     sources: list[dict[str, str | float]] = []
     seen: set[str] = set()
     best = 0.0
 
-    for part in parts:
-        outcome = retrieve(part)
-        best = max(best, outcome.best_score)
-        if not outcome.grounded:
+    previous = ""
+    for index, part in enumerate(parts):
+        previous = parts[index - 1] if index else ""
+        own = _retrieve_part(part)
+        best = max(best, own.best_score)
+
+        chunks, have = [], set()
+        for chunk in [*(own.chunks if own.grounded else []), *whole.chunks]:
+            if chunk.chunk_id not in have:
+                have.add(chunk.chunk_id)
+                chunks.append(chunk)
+        if not chunks:
+            unanswered.append(part)
             continue
 
-        # Streamed like any other answer. The guard matters more here
-        # than anywhere: a part the documents cannot answer refuses, and
-        # that refusal must not appear on screen between two halves that
-        # did answer.
-        if answers:
-            sink = active_sink()
-            if sink:
-                sink("\n\n")
-
+        context = "\n\n".join(c.cite(i) for i, c in enumerate(chunks, start=1))
         try:
-            with guarded_tokens(INSUFFICIENT):
-                reply = complete_verbose(
-                    render(
-                        "inquiry_user",
-                        context=outcome.as_context(),
-                        history=_format_history(history),
-                        question=part,
-                    ),
-                    system=render("inquiry_system"),
-                    stream=True,
-                )
+            reply = complete_verbose(
+                render(
+                    "inquiry_user",
+                    context=context,
+                    history=_format_history(history),
+                    question=_part_question(part, previous),
+                ),
+                system=render("inquiry_system"),
+            )
         except LLMError as exc:
             logger.error("Compound part failed: %s", exc)
+            unanswered.append(part)
             continue
 
         if _is_refusal(reply.text):
+            unanswered.append(part)
             continue
 
         answers.append(reply.text.strip())
-        for source in outcome.sources:
-            key = f"{source['source']}#{source['breadcrumb']}"
+        for chunk in chunks:
+            key = f"{chunk.source}#{chunk.breadcrumb}"
             if key not in seen:
                 seen.add(key)
-                sources.append(source)
+                sources.append(
+                    {"breadcrumb": chunk.breadcrumb, "source": chunk.source,
+                     "score": round(chunk.score, 3)}
+                )
 
     if not answers:
         return None
 
+    answers = _without_repeats(answers)
+
+    for part in unanswered:
+        # Quoted back so the patient can see which half was meant, but
+        # capped: a part is whatever the patient typed, and echoing an
+        # arbitrarily long or hostile string verbatim helps nobody.
+        shown = part if len(part) <= MAX_QUOTED_PART else part[:MAX_QUOTED_PART].rstrip() + "..."
+        answers.append(
+            f"I can't find an answer to \"{shown}\" in the laboratory's information."
+        )
+
     logger.info(
-        "Compound question answered in %d of %d parts: %s",
-        len(answers), len(parts), question[:80],
+        "Compound question: %d of %d parts answered: %s",
+        len(parts) - len(unanswered), len(parts), question[:80],
     )
+    final = "\n\n".join(answers)
+
+    # Released once, finished. Streaming each part as it was written meant
+    # the "I can't find..." note and the removal of a repeated answer both
+    # happened after the reader had already seen the text, so a sentence
+    # would type out twice and then collapse. The page paces the reveal
+    # itself, so nothing is lost by sending the whole answer at once.
+    sink = active_sink()
+    if sink:
+        sink(final)
+
     return AgentResponse(
         answer="\n\n".join(answers),
         agent=AGENT_NAME,
@@ -445,7 +686,7 @@ def _retry_as_parts(
         metadata={
             "grounded": True,
             "compound_parts": len(parts),
-            "compound_answered": len(answers),
+            "compound_unanswered": unanswered,
             "search_query": search_query,
             "retrieval_status": RetrievalStatus.OK.value,
             "best_score": round(best, 3),

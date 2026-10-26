@@ -311,3 +311,33 @@ def test_ui_and_docs_are_served() -> None:
         assert client.get("/static/app.js").status_code == 200
         assert client.get("/docs").status_code == 200
         assert client.get("/openapi.json").status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# The chat page must not show a long dash while a reply is being typed
+# ---------------------------------------------------------------------------
+
+
+def test_the_chat_page_folds_long_dashes_before_it_renders() -> None:
+    """The server tidies a finished answer; the page types it out as it
+    arrives. Without this the dash is visible for the whole reveal and only
+    vanishes when the final text swaps in."""
+    from pathlib import Path
+
+    script = (Path(__file__).parent.parent / "ui" / "app.js").read_text(encoding="utf-8")
+
+    assert "function foldDashes(" in script
+    assert "const text = foldDashes(rawText);" in script
+
+
+def test_the_reveal_cannot_hang_when_the_browser_withholds_animation_frames() -> None:
+    """A browser can withhold frames without marking the page hidden - an
+    off-screen pane, battery saver. The reply then arrived and was never
+    drawn, and the composer stayed locked behind it. A timer backs the
+    frame up."""
+    from pathlib import Path
+
+    script = (Path(__file__).parent.parent / "ui" / "app.js").read_text(encoding="utf-8")
+
+    assert "watchdog = setTimeout(" in script
+    assert "clearTimeout(watchdog);" in script

@@ -15,6 +15,14 @@ const app = document.getElementById('app');
 const view = document.getElementById('view');
 const tabs = document.getElementById('tabs');
 
+/* "5035550155" is a matching key, not something to ask a person to read. */
+const spokenPhone = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits.length === 10
+    ? `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+    : String(value ?? '');
+};
+
 const escapeHtml = (s) => String(s ?? '')
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
   .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -221,7 +229,7 @@ const views = {
       rows.map((r) => `
         <tr>
           <td>${escapeHtml(r.name) || '-'}</td>
-          <td><code>${escapeHtml(r.phone)}</code></td>
+          <td><code>${escapeHtml(spokenPhone(r.phone))}</code></td>
           <td>${r.visit_count}</td>
           <td>${when(r.first_seen)}</td>
           <td>${when(r.last_seen)}</td>

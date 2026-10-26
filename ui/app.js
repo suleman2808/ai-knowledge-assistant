@@ -44,7 +44,42 @@ function escapeHtml(text) {
  * features, and every one of them here runs on already-escaped text, so
  * the usual sanitisation question does not arise.
  */
-function renderMarkdown(text) {
+/**
+ * Fold long dashes to hyphens, as the server does to a finished answer.
+ *
+ * The server can only tidy an answer once it is complete, but the page
+ * types it out as it arrives, so without this an em dash is on screen for
+ * the whole reveal and only disappears when the final text swaps in. The
+ * rule is the same as `app/agents/base.py`: between words it is a spaced
+ * hyphen, between digits a tight one, and spacing is repaired only where
+ * a dash was.
+ */
+const LONG_DASHES = '\u2014\u2013\u2012\u2015';
+
+function foldDashes(text) {
+  const source = String(text);
+  let out = '';
+  let skipSpace = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (skipSpace && ch === ' ') { skipSpace = false; continue; }
+    skipSpace = false;
+    if (!LONG_DASHES.includes(ch)) { out += ch; continue; }
+
+    const before = i > 0 ? source[i - 1] : ' ';
+    const after = i + 1 < source.length ? source[i + 1] : ' ';
+    if (/\d/.test(before) && /\d/.test(after)) out += '-';
+    else if (before === ' ' && after === ' ') out += '-';
+    else {
+      out += out.endsWith(' ') ? '- ' : ' - ';
+      skipSpace = after === ' ';
+    }
+  }
+  return out;
+}
+
+function renderMarkdown(rawText) {
+  const text = foldDashes(rawText);
   const inline = (s) => escapeHtml(s)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>')
@@ -102,10 +137,12 @@ function createTypewriter(element, onSettled) {
   let full = '';
   let shown = 0;
   let frame = null;
+  let watchdog = null;
   let finishing = false;
 
   function paint() {
     frame = null;
+    clearTimeout(watchdog);
     const remaining = full.length - shown;
     if (remaining > 0) {
       // Pacing is for someone watching. A hidden tab gets the text
@@ -133,9 +170,24 @@ function createTypewriter(element, onSettled) {
      half-written reply and a disabled composer. */
   function schedule() {
     if (frame !== null) return;
-    frame = document.hidden
-      ? setTimeout(paint, 0)
-      : requestAnimationFrame(paint);
+    if (document.hidden) {
+      frame = setTimeout(paint, 0);
+      return;
+    }
+    frame = requestAnimationFrame(paint);
+
+    /* A browser can withhold animation frames without marking the page
+       hidden: a pane that is not on screen, battery saver, a throttled
+       embed. The reply then arrives and is never drawn, and the composer
+       stays locked behind it. A timer backs the frame up; at 60fps the
+       frame always wins, and the timer is cleared before it can fire. */
+    watchdog = setTimeout(() => {
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+        frame = null;
+        paint();
+      }
+    }, 150);
   }
 
   return {
@@ -152,6 +204,7 @@ function createTypewriter(element, onSettled) {
         cancelAnimationFrame(frame);
         clearTimeout(frame);
       }
+      clearTimeout(watchdog);
       frame = null;
     },
   };

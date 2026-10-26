@@ -26,6 +26,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.agents.base import AgentResponse, failure
+from app.config import settings
 from app.agents.dates import resolve as resolve_relative_date
 from app.integrations.calendar import (
     Appointment,
@@ -112,6 +113,20 @@ def _parse_date(value: object) -> date | None:
     return parsed
 
 
+def _passed_day(extracted: dict, today: date) -> str | None:
+    """The day the patient named, spoken, if it was before today."""
+    raw = extracted.get("date")
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        named = datetime.strptime(raw.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    if named >= today:
+        return None
+    return "Yesterday" if named == today - timedelta(days=1) else _spoken_date(raw)
+
+
 def _parse_time(value: object) -> tuple[int, int] | None:
     """Parse 'HH:MM' into hour and minute."""
     if not value or not isinstance(value, str):
@@ -150,8 +165,15 @@ def _preference_window(preference: str | None) -> tuple[int, int] | None:
 MAX_ASKS_AT_ONCE = 2
 
 
-def _ask_for(missing: list[str], extracted: dict) -> AgentResponse:
-    """Request the specific details still needed, and nothing else."""
+def _ask_for(
+    missing: list[str], extracted: dict, *, date_had_passed: str | None = None
+) -> AgentResponse:
+    """Request the specific details still needed, and nothing else.
+
+    `date_had_passed` is the day the patient named if it was already over.
+    It used to be discarded without a word and the patient was simply asked
+    which day suits them, which reads as the assistant not having heard.
+    """
     prompts = {
         "service": "what you'd like to come in for",
         "date": "which day suits you",
@@ -183,9 +205,15 @@ def _ask_for(missing: list[str], extracted: dict) -> AgentResponse:
     if extracted.get("time_preference"):
         known.append(f"in the {extracted['time_preference']}")
 
-    opener = (
-        f"Happy to book {' '.join(known)}. " if known else "Happy to get you booked in. "
-    )
+    if date_had_passed and "date" in missing:
+        opener = (
+            f"{date_had_passed} has already passed, so I can't book that day. "
+            + (f"I can book {' '.join(known)} for a day still ahead. " if known else "")
+        )
+    else:
+        opener = (
+            f"Happy to book {' '.join(known)}. " if known else "Happy to get you booked in. "
+        )
 
     return AgentResponse(
         answer=f"{opener}Could you tell me {request}?",
@@ -360,6 +388,12 @@ def handle_booking(
 
     service = (extracted.get("service") or "").strip() or None
 
+    # Checked against the catalogue before anything else is asked of the
+    # patient: there is no point collecting a name, a day and a number for
+    # an appointment that cannot exist.
+    if not is_a_service_we_offer(service):
+        return _not_a_service(service or "")
+
     # The model reports the phrase; code resolves it. Where the two
     # disagree, the function wins — it is arithmetic, and the model was
     # observed booking "next Tuesday" a week late in production while
@@ -422,7 +456,9 @@ def handle_booking(
         missing.append("time")
 
     if missing:
-        return _ask_for(missing, normalised)
+        return _ask_for(
+            missing, normalised, date_had_passed=_passed_day(extracted, today)
+        )
 
     duration = duration_for(service or "")
     assert booking_date is not None  # guaranteed by the `missing` check
@@ -501,6 +537,113 @@ def handle_booking(
         return failure(AGENT_NAME, "unexpected", f"{type(exc).__name__}: {exc}", stage="create")
 
     return _confirm(appointment, calendar.name, normalised)
+
+
+# ---------------------------------------------------------------------------
+# Is this something the laboratory does?
+# ---------------------------------------------------------------------------
+
+# Words that say nothing about WHICH service is wanted.
+_SERVICE_STOPWORDS = frozenset({
+    "a", "an", "the", "my", "for", "of", "to", "and", "some", "please", "test",
+    "tests", "testing", "scan", "check", "appointment", "booking", "book",
+    "slot", "session", "visit", "one", "new", "another", "same",
+})
+
+# What a laboratory plainly does, whatever the catalogue happens to list.
+# Without these a patient asking for "a blood test" or "a health check"
+# would be refused for not naming a line in a table.
+_GENERIC_SERVICE_WORDS = frozenset({
+    "blood", "urine", "stool", "swab", "culture", "sample", "samples",
+    "collection", "draw", "health", "checkup", "screening", "panel", "profile",
+    "fasting", "glucose", "cholesterol", "thyroid", "vitamin", "hormone",
+    "hormones", "antibody", "antibodies", "pregnancy", "allergy", "infection",
+    "haemoglobin", "hemoglobin", "iron", "liver", "kidney", "lipid", "sugar",
+    "diabetes", "covid", "hiv", "std", "sti", "cancer", "marker", "markers",
+    "pathology", "biopsy", "semen", "drug", "alcohol", "paternity", "dna",
+})
+
+_catalogue_words: frozenset[str] | None = None
+
+
+def _words(text: str) -> list[str]:
+    cleaned = "".join(c.lower() if c.isalnum() else " " for c in text)
+    return [w for w in cleaned.split() if w]
+
+
+def _catalogue_vocabulary() -> frozenset[str]:
+    """Every word that appears in the test catalogue's test names.
+
+    Read from the document itself rather than copied into code, so adding a
+    test to the catalogue makes it bookable with no other change - and a
+    test removed from it stops being bookable.
+    """
+    global _catalogue_words
+    if _catalogue_words is not None:
+        return _catalogue_words
+
+    words: set[str] = set()
+    path = settings.documents_dir / "test-catalogue-and-pricing.md"
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            # A table row: "| Full blood count (FBC/CBC) | $45 | ... |".
+            if not line.startswith("|") or set(line) <= set("|- :"):
+                continue
+            first_cell = line.strip("|").split("|")[0]
+            words.update(_words(first_cell))
+    except OSError:
+        logger.warning("Test catalogue unreadable; accepting any service")
+        _catalogue_words = frozenset()
+        return _catalogue_words
+
+    _catalogue_words = frozenset(words) - {"test", "price"}
+    return _catalogue_words
+
+
+def is_a_service_we_offer(service: str | None) -> bool:
+    """Whether `service` plausibly names something this laboratory does.
+
+    Deliberately permissive on the way in: refusing a real test is worse
+    than accepting an odd one, because the first loses a patient and the
+    second is caught by the staff who read the diary. So a service passes
+    if ANY meaningful word in it is one the catalogue (or a laboratory's
+    ordinary vocabulary) knows. "Haircut", "MRI scan" and "dental
+    cleaning" share no word with either, and are refused.
+    """
+    if not service:
+        return True  # nothing named yet; asking for it is the next step
+
+    meaningful = [w for w in _words(service) if w not in _SERVICE_STOPWORDS]
+    if not meaningful:
+        return True  # "a test", "an appointment": generic, and fine
+
+    vocabulary = _catalogue_vocabulary()
+    if not vocabulary:
+        return True  # catalogue unavailable: do not refuse blind
+    return any(w in vocabulary or w in _GENERIC_SERVICE_WORDS for w in meaningful)
+
+
+def _not_a_service(service: str) -> AgentResponse:
+    """Decline to book something a laboratory does not do.
+
+    Before this existed the assistant confirmed "You're booked in - haircut
+    on Monday at 2:00 PM", at a medical laboratory, because the model
+    extracts whatever the patient said and nothing checked it.
+    """
+    return AgentResponse(
+        answer=(
+            f"I'm afraid I can't book a {service} - Riverbend Diagnostics is a "
+            "diagnostic laboratory, so the appointments I arrange are for "
+            "tests and sample collections, such as blood tests, urine tests "
+            "and health checks. If you tell me which test you need, I'll find "
+            "you a time."
+        ),
+        agent=AGENT_NAME,
+        success=True,
+        needs_followup=True,
+        metadata={"stage": "unknown_service", "service": service},
+    )
 
 
 # ---------------------------------------------------------------------------

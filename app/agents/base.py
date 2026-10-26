@@ -66,9 +66,48 @@ def normalise(text: str) -> str:
     one place that catches prose the model wrote as well as prose this
     repository wrote.
     """
-    for character, replacement in {**_INVISIBLE, **_DASHES}.items():
+    for character, replacement in _INVISIBLE.items():
         text = text.replace(character, replacement)
-    return text
+    return _fold_dashes(text)
+
+
+def _fold_dashes(text: str) -> str:
+    """Replace long dashes without gluing the words either side together.
+
+    A bare swap turned "lipid profile—typically for 9 to 12 hours"
+    into "lipid profile-typically", which reads as a compound word. An em
+    dash between words is a pause, so it becomes " - "; between digits
+    ("9–12") it is a range, and a tight hyphen is right.
+
+    Spacing is repaired only where a dash was, never across the whole text:
+    markdown reads two trailing spaces as a line break, and collapsing
+    every double space would quietly merge the lines of a list.
+    """
+    out: list[str] = []
+    skip_space = False
+    for i, ch in enumerate(text):
+        if skip_space and ch == " ":
+            skip_space = False
+            continue
+        skip_space = False
+        if ch not in _DASHES:
+            out.append(ch)
+            continue
+
+        before = text[i - 1] if i > 0 else " "
+        after = text[i + 1] if i + 1 < len(text) else " "
+        if before.isdigit() and after.isdigit():
+            out.append("-")
+        elif before == " " and after == " ":
+            out.append("-")
+        else:
+            # " - ", without doubling a space that was already there.
+            if out and out[-1] == " ":
+                out.append("- ")
+            else:
+                out.append(" - ")
+            skip_space = after == " "
+    return "".join(out)
 
 
 @dataclass

@@ -825,3 +825,264 @@ def test_a_soft_no_after_a_confirmed_booking_keeps_the_appointment(
     assert response.metadata["stage"] == "deferred"
     assert len(calendar.appointments) == 1
     assert "cancel" in response.answer.lower()  # offered, not performed
+
+
+# ---------------------------------------------------------------------------
+# Found testing the live demo
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "service",
+    ["haircut", "MRI scan", "X-ray", "dental cleaning", "massage"],
+)
+def test_a_service_the_laboratory_does_not_do_is_refused(service: str) -> None:
+    """Reported from the live demo: "You're booked in, Lee Park - haircut on
+    Monday at 2:00 PM", at a medical laboratory. The model extracts whatever
+    the patient says and nothing checked it against what is offered."""
+    from app.agents.booking import is_a_service_we_offer
+
+    assert is_a_service_we_offer(service) is False
+
+
+@pytest.mark.parametrize(
+    "service",
+    [
+        "blood test", "lipid profile", "full blood count", "thyroid profile",
+        "health check", "urine test", "HbA1c", "glucose tolerance test",
+        "vitamin D", "covid test", "pregnancy test", "liver function tests",
+        # Nothing specific named yet: asking for it is the next step.
+        "a test", "appointment", None,
+    ],
+)
+def test_a_real_service_is_never_refused(service: str | None) -> None:
+    """Refusing a real test loses a patient; accepting an odd one is caught
+    by whoever reads the diary. The check leans permissive."""
+    from app.agents.booking import is_a_service_we_offer
+
+    assert is_a_service_we_offer(service) is True
+
+
+def test_booking_a_haircut_is_declined_before_anything_else_is_asked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub_extraction(
+        monkeypatch,
+        {"service": "haircut", "date": next_weekday(0).isoformat(), "time": "14:00",
+         "time_preference": None, "patient_name": "Lee Park", "phone": "503-555-0155"},
+    )
+    calendar = InMemoryCalendar(appointments=[])
+
+    reply = handle_booking("book a haircut", backend=calendar, session_id="h")
+
+    assert reply.metadata["stage"] == "unknown_service"
+    assert "can't book a haircut" in reply.answer
+    assert calendar.appointments == []
+
+
+def test_the_catalogue_is_read_from_the_document_not_copied_into_code() -> None:
+    """A test added to the catalogue becomes bookable with no other change."""
+    from app.agents.booking import _catalogue_vocabulary
+
+    vocabulary = _catalogue_vocabulary()
+
+    assert {"haemoglobin", "lipid", "glucose"} <= vocabulary or "lipid" in vocabulary
+    assert "haircut" not in vocabulary
+
+
+def test_a_date_that_has_passed_is_acknowledged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reported: "book a blood test yesterday at 10am" was answered with "which
+    day suits you?" as though the date had never been said."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    stub_extraction(
+        monkeypatch,
+        {"service": "blood test", "date": yesterday, "time": "10:00",
+         "time_preference": None, "patient_name": "Mia Clarke", "phone": "503-555-0199"},
+    )
+
+    reply = handle_booking("book a blood test yesterday at 10am",
+                           backend=InMemoryCalendar(appointments=[]), session_id="p")
+
+    assert "already passed" in reply.answer
+    assert "Yesterday" in reply.answer
+
+
+def test_a_long_dash_between_words_does_not_glue_them_together() -> None:
+    """Reported: "lipid profile-typically for 9 to 12 hours"."""
+    assert normalise("lipid profile\u2014typically for 9 to 12 hours") == (
+        "lipid profile - typically for 9 to 12 hours"
+    )
+
+
+def test_a_dash_between_digits_stays_a_tight_range() -> None:
+    assert normalise("fast for 9\u201312 hours") == "fast for 9-12 hours"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "My haemoglobin is 9.2, is that bad?",
+        "my glucose is 130 is that normal",
+        "is a cholesterol of 6.1 dangerous?",
+        "TSH 5.2 high?",
+        "my result says 14 g/dL, should I worry?",
+    ],
+)
+def test_a_request_to_interpret_a_result_never_reaches_the_model(
+    monkeypatch: pytest.MonkeyPatch, message: str
+) -> None:
+    """Reported: "9.2 g/dL is not in the critical range". The prompt forbade
+    it and the model said it anyway, through two rewordings, so the rule is
+    now enforced in code. The suite's guard would fail this test if a model
+    call were made."""
+    from app.agents.inquiry import RESULT_INTERPRETATION_ANSWER
+
+    monkeypatch.setattr(
+        "app.agents.inquiry.retrieve",
+        lambda _q: RetrievalResult(query="q", status=RetrievalStatus.LOW_CONFIDENCE),
+    )
+
+    reply = answer_inquiry(message)
+
+    assert reply.answer == RESULT_INTERPRETATION_ANSWER
+    assert reply.metadata["handled"] == "result_interpretation"
+
+
+def test_the_interpretation_refusal_makes_no_clinical_claim() -> None:
+    from app.agents.inquiry import RESULT_INTERPRETATION_ANSWER
+
+    lowered = RESULT_INTERPRETATION_ANSWER.lower()
+    for word in ("critical", "threshold", "normal range", "reference range", "below", "above"):
+        assert word not in lowered
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "How much is a glucose test?",
+        "do I need to fast for 12 hours?",
+        "can I come at 8 ok?",
+        "is my haemoglobin result ready?",
+        "what is a normal haemoglobin test",
+    ],
+)
+def test_ordinary_questions_are_not_mistaken_for_a_request_to_interpret(message: str) -> None:
+    from app.agents.inquiry import asks_to_interpret_a_result
+
+    assert asks_to_interpret_a_result(message) is False
+
+
+def test_each_half_of_a_compound_question_is_anchored_to_the_business() -> None:
+    """"Where are your branches" scored 0.28 and was rejected; with the
+    company's name in it, 0.62 and the right section."""
+    from app.agents.inquiry import _anchor
+
+    assert _anchor("where are your branches") == "where are your branches Riverbend Diagnostics"
+    assert _anchor("hours at Riverbend Diagnostics") == "hours at Riverbend Diagnostics"
+
+
+# ---------------------------------------------------------------------------
+# The test catalogue, looked up by name
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("question", "test_name"),
+    [
+        # Reported: this was declined, because retrieval never returned the
+        # table holding the row, so the model had nothing to answer from.
+        ("how much is a lipid profile?", "Lipid profile"),
+        ("how much does a full blood count cost", "Full blood count"),
+        ("price of HbA1c", "HbA1c"),
+        ("what is the LFT price", "Liver function tests"),
+        ("how much is an ESR", "Erythrocyte sedimentation rate"),
+        ("do I need to fast for a glucose tolerance test", "Glucose tolerance test"),
+    ],
+)
+def test_a_test_named_in_the_question_is_found_in_the_catalogue(
+    question: str, test_name: str
+) -> None:
+    from app.rag.catalogue import rows_named_in
+
+    assert [r.name for r in rows_named_in(question)] == [test_name]
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["how much is a blood test", "do you open on sunday", "how much is a haircut"],
+)
+def test_a_question_that_names_no_test_matches_no_row(question: str) -> None:
+    from app.rag.catalogue import rows_named_in
+
+    assert rows_named_in(question) == []
+
+
+def test_the_catalogue_row_reaches_the_model_even_when_retrieval_misses_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The failure in one test: retrieval returns nothing useful, the named
+    test's row is supplied anyway, and the model answers from it."""
+    seen: dict[str, str] = {}
+
+    def _answer(prompt: str, **_kw):  # noqa: ANN003, ANN202
+        seen["prompt"] = prompt
+        from app.llm import LLMResponse
+        return LLMResponse(text="A lipid profile costs $62.", model="m", latency_ms=1,
+                           prompt_tokens=0, completion_tokens=0, raw=None)
+
+    monkeypatch.setattr("app.agents.inquiry.complete_verbose", _answer)
+    monkeypatch.setattr(
+        "app.agents.inquiry.retrieve",
+        lambda _q: RetrievalResult(query="q", status=RetrievalStatus.LOW_CONFIDENCE),
+    )
+
+    reply = answer_inquiry("how much is a lipid profile?")
+
+    assert "| Lipid profile | $62 |" in seen["prompt"]
+    assert reply.answer == "A lipid profile costs $62."
+    assert reply.metadata["grounded"] is True
+
+
+def test_an_answer_repeated_by_two_parts_is_said_once() -> None:
+    from app.agents.inquiry import _without_repeats
+
+    same = "Yes - a lipid profile needs a 9-12 hour fast. It costs $62."
+    assert _without_repeats([same, same.replace("Yes - ", "Yes, ")]) == [same]
+    assert _without_repeats(["Fasting is needed.", "It costs $62."]) == [
+        "Fasting is needed.", "It costs $62.",
+    ]
+
+
+def test_a_pronoun_only_part_is_given_what_it_refers_to() -> None:
+    """"How much does it cost" means nothing without the other half."""
+    from app.agents.inquiry import _part_question
+
+    assert "lipid profile" in _part_question("how much does it cost", "do I need to fast for a lipid profile")
+    # A part with its own subject is left exactly as asked: appending the
+    # rest of the message made the model refuse the half it could answer.
+    assert _part_question("what are your hours", "do you do allergy testing") == "what are your hours"
+
+
+def test_folding_a_dash_does_not_merge_the_lines_of_a_markdown_list() -> None:
+    """The first version collapsed every double space in an answer, and
+    markdown reads two trailing spaces as a line break - so a list written
+    that way would have run together into one paragraph."""
+    text = "Monday to Friday: 6:30 am - 6:00 pm  \nSaturday: 7:00 am - 2:00 pm  \nSunday: 8:00 am"
+
+    assert normalise(text) == text
+
+
+def test_a_dash_next_to_a_space_does_not_double_it() -> None:
+    assert normalise("word \u2014word") == "word - word"
+    assert normalise("word\u2014 word") == "word - word"
+    assert normalise("a \u2014 b") == "a - b"
+
+
+def test_an_unanswered_part_is_quoted_back_only_to_a_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A part is whatever the patient typed. Echoing it unbounded would
+    repeat an arbitrarily long or hostile string back to them."""
+    from app.agents.inquiry import MAX_QUOTED_PART
+
+    assert MAX_QUOTED_PART <= 100

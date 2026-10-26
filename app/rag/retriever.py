@@ -289,6 +289,38 @@ def _diversify(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
     return kept
 
 
+def _plain_hours(query: str) -> str:
+    """"hours" on its own means opening hours, so say so.
+
+    "What are your hours" retrieved "Urgent Situations > Out of Hours" and
+    never the section that lists when the laboratory is open: the word
+    matches that heading, while "opening hours" matches the right one. The
+    question is among the most-asked there is, and the model - shown the
+    wrong section - correctly refused to answer it.
+
+    Deliberately the narrowest rule that fixes it, not a synonym table. A
+    curated map of patient phrasing to document phrasing was tried earlier
+    and changed the evaluation by nothing at all; this changes one question
+    and the evaluation shows what else it moves. Left alone where the
+    patient already said what kind of hours they mean.
+    """
+    words = query.split()
+    lowered = [w.strip("?,.!").lower() for w in words]
+    if "hours" not in lowered:
+        return query
+    if any(w in lowered for w in ("opening", "open", "after", "out", "office",
+                                   "working", "visiting", "business", "branch")):
+        return query
+    i = lowered.index("hours")
+    # Only when "hours" is the laboratory's: "your hours", "the hours", or
+    # the word on its own. "How many hours should I fast" and "results
+    # within 24 hours" are about something else entirely.
+    before = lowered[i - 1] if i else ""
+    if i and before not in {"your", "the", "our", "are", "what", "whats", "what's", "its"}:
+        return query
+    return " ".join([*words[:i], "opening", *words[i:]])
+
+
 def retrieve(
     query: str,
     *,
@@ -321,6 +353,7 @@ def retrieve(
             status=RetrievalStatus.NO_MATCH,
             detail="Empty query.",
         )
+    query = _plain_hours(query)
 
     k = top_k or settings.retrieval_top_k
     threshold = settings.retrieval_min_score if min_score is None else min_score
